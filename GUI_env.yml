@@ -1,0 +1,25 @@
+name: MWD_Inference_ENV_torch
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.5
+  - cmake
+  - pyqt=5.15.10
+  - pytorch=2.5.1
+  - cpuonly  # Remove or replace if using CUDA
+  - pip
+  - pip:
+      - matplotlib==3.8.4
+      - numpy==1.24.3
+      - scipy==1.13.1
+      - protobuf==3.20.3
+      - tensorflow==2.13.1
+      - dm-tree
+      - namex
+      - regex
+      - click
+      - psutil
+      - toml
+      - tqdm
