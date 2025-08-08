@@ -1,4 +1,4 @@
-name: MWD_Inference_ENV_torch
+name: MWD_Inference_ENV
 channels:
   - pytorch
   - conda-forge
