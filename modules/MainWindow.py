@@ -19,6 +19,7 @@ import torch
 from NN_models.PytorchPoly_model import PolyModel
 from NN_models.PytorchBinary_model import BinaryModel
 from NN_models.PytorchMono_model import MonoModel
+from NN_models.PytorchClassifier_model import ClassifierModel
 tf.get_logger().setLevel('ERROR')
 from scipy.integrate import simpson as simps
 from decimal import Decimal
@@ -932,25 +933,33 @@ class MainWindow(QMainWindow):
             return
 
         
-        file_names = [f for f in os.listdir(directory) if "Classifier" in str(f) and f.endswith(".keras")]
+        file_names = [f for f in os.listdir(directory) if "Classifier" in str(f) and f.endswith(".pth")]
         if not file_names:
             QMessageBox.warning(self, "Error", f"No classification models found in '{directory}'.")
             return
         pred_class_nums = np.zeros(3)
         self.classes = ['Polydisperse','Monodisperse','Bidisperse']
         X_val = np.log10(np.exp(self.optimiseresult))
-        X_val = X_val.reshape(1, -1)
+        X_val = X_val.reshape(1, -1, 1)
+        X_tensor = torch.from_numpy(X_val.astype(np.float32))
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        X_tensor = X_tensor.to(device)
         
         for file in file_names:
             
             path = os.path.join(directory, file)
-            self.model = tf.keras.models.load_model(path)
             
-            prediction = self.model.predict(X_val, verbose=0)
-            
-            indiv_predicted_class = np.argmax(prediction)
-            
-            pred_class_nums[indiv_predicted_class] += 1
+            input_length = X_val.shape[1]
+            model = ClassifierModel(input_length)
+            model.load_state_dict(torch.load(path, map_location=device, weights_only=True))
+            model.to(device)
+            model.eval()
+            with torch.no_grad():
+                outputs = model(X_tensor)
+                probs = torch.softmax(outputs, dim=1).cpu().numpy()
+                indiv_predicted_class = np.argmax(probs)
+                pred_class_nums[indiv_predicted_class] += 1
         
         predicted_class = np.argmax(pred_class_nums)
         self.predicted_label = self.classes[predicted_class]
