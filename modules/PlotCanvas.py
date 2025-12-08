@@ -21,9 +21,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ["QT_ENABLE_HIGHDPI_SCALING"]   = "1"
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_SCALE_FACTOR"]             = "1"
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
-
 
 class PlotCanvas(FigureCanvasQTAgg):
     plot_added = pyqtSignal(str, str)  

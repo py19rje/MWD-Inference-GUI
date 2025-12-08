@@ -14,13 +14,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ["QT_ENABLE_HIGHDPI_SCALING"]   = "1"
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 os.environ["QT_SCALE_FACTOR"]             = "1"
-import tensorflow as tf
 import torch
 from NN_models.PytorchPoly_model import PolyModel
 from NN_models.PytorchBinary_model import BinaryModel
 from NN_models.PytorchMono_model import MonoModel
 from NN_models.PytorchClassifier_model import ClassifierModel
-tf.get_logger().setLevel('ERROR')
 from scipy.integrate import simpson as simps
 from decimal import Decimal
 from modules.themes import themes

@@ -32,7 +32,7 @@ cd /parent/directory/
 ```  
 3. Run the following command to clone the repository:
 ```bash
-git clone https://github.com/py19rje/Inference_GUI_test.git
+git clone https://github.com/py19rje/MWD-Inference-GUI.git
 ```
 
 At this stage, you may be asked to enter a username and password if the repository is private. If this is the case, please follow advice you should have received on how to do this (it is not as simple as just entering your GitHub username and password). This will likely involve downloading git credential manager.
@@ -40,7 +40,7 @@ At this stage, you may be asked to enter a username and password if the reposito
 ### 3. Navigate to the cloned directory 
 Run the following code in the Anaconda Prompt or Terminal to make the working directory correct (ensure you the directory name matches the new directory):
 ```bash
-cd GUI_test
+cd MWD-Inference-GUI
 ```
 
 ### 4. Create and activate a conda environment:
