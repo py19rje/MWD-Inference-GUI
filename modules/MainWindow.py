@@ -92,7 +92,6 @@ class MainWindow(QMainWindow):
         self.GPC_loaded = False
         self.app = QApplication.instance()
         self.app.is_dark = False
-
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -334,6 +333,8 @@ class MainWindow(QMainWindow):
         self.save_fig_button.clicked.connect(self.save_figure)
         self.change_frequency_button.clicked.connect(self.change_frequency_range)
         self.help_button.clicked.connect(self.show_help)
+        
+        self.active_model_stats_dict = {}
         
     def show_help(self):
         if hasattr(self, 'help_dialog') and self.help_dialog is not None:
@@ -988,6 +989,7 @@ class MainWindow(QMainWindow):
             loaded_model_names = [name.strip() for name in label_text.split(',') if name.strip()]
         self.model_stats_dict = {}
         mn_list, mw_list, pdi_list = [], [], []
+        MwS_list, MwL_list, phiS_list, phiL_list = [], [], [], []
         any_success = False
         self.predictions_dict = {}
         gpc_loaded = self.GPC_loaded
@@ -1021,7 +1023,7 @@ class MainWindow(QMainWindow):
                     def format_e(n):
                         a = '%E' % n
                         return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-                    self.model_stats_dict[short_label] = [format_e(Decimal(Mn)), format_e(Decimal(Mw)), f"{PDI:.2f}"]
+                    self.model_stats_dict[short_label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
                     mn_list.append(Mn)
                     mw_list.append(Mw)
                     pdi_list.append(PDI)
@@ -1030,12 +1032,12 @@ class MainWindow(QMainWindow):
                         "curve": pred_MWD.copy()
                     }
                     if idx == 0:
-                        self.pred_MWD = pred_MWD
-                        self.Est_Mn = Mn
-                        self.Est_Mw = Mw
-                        self.Est_PDI = PDI
+                        # self.pred_MWD = pred_MWD
+                        # self.Est_Mn = Mn
+                        # self.Est_Mw = Mw
+                        # self.Est_PDI = PDI
                         self.tails_correct_button.setVisible(True)
-                        self.prediction = prediction_np.copy()
+                        # self.prediction = prediction_np.copy()
                 elif self.class_to_use == 1:
                     if not self.univ_space:
                         QMessageBox.warning(self, "Error", "PLease convert data to universal space to make a monodisperse prediction.")
@@ -1052,7 +1054,7 @@ class MainWindow(QMainWindow):
                     def format_e(n):
                         a = '{:.3E}'.format(n)
                         return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-                    self.model_stats_dict[short_label] = [format_e(Decimal(Mn)), format_e(Decimal(Mw)), f"{PDI:.2f}"]
+                    self.model_stats_dict[short_label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
                     mn_list.append(Mn)
                     mw_list.append(Mw)
                     pdi_list.append(PDI)
@@ -1068,7 +1070,7 @@ class MainWindow(QMainWindow):
                         self.PDI_change_button.setVisible(True)
                         self.prediction = prediction_np.copy()
                 elif self.class_to_use == 2:
-                    phiS_list, phiL_list = [], []
+                    
                     if not self.univ_space:
                         QMessageBox.warning(self, "Error", "Please convert data to universal space to make a binary prediction.")
                         return
@@ -1078,8 +1080,6 @@ class MainWindow(QMainWindow):
                     ZL_pred = 10**float(prediction_np[0][1])
                     phiL_pred = float(prediction_np[0][2])
                     phiS_pred = 1 - phiL_pred 
-                    phiL_list.append(phiL_pred)
-                    phiS_list.append(phiS_pred)
                     mean_ZS_pred = np.log(ZS_pred)-(sigma_bin**2)/2
                     mean_ZL_pred = np.log(ZL_pred)-(sigma_bin**2)/2
                     pred_MWD = phiL_pred * lognormal(self.z, mean_ZL_pred, sigma_bin) + phiS_pred * lognormal(self.z, mean_ZS_pred, sigma_bin)
@@ -1089,6 +1089,10 @@ class MainWindow(QMainWindow):
                     MnS = MwS / PDI
                     MwL = ZL_pred * self.M_e
                     MnL = MwL / PDI
+                    MwS_list.append(MwS)
+                    MwL_list.append(MwL)
+                    phiL_list.append(phiL_pred)
+                    phiS_list.append(phiS_pred)
                     def format_e(n):
                         a = '{:.3E}'.format(n)
                         return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
@@ -1103,17 +1107,17 @@ class MainWindow(QMainWindow):
                         "curve": pred_MWD.copy()
                     }
                     if idx == 0:
-                        self.pred_MWD = pred_MWD
-                        self.Est_MwS = MwS
-                        self.Est_MnS = MnS
-                        self.Est_MwL = MwL
-                        self.Est_MnL = MnL
-                        self.Est_phiL = phiL_pred
-                        self.Est_phiS = phiS_pred
-                        self.Est_PDIL = PDI
-                        self.Est_PDIS = PDI
+                        # self.pred_MWD = pred_MWD
+                        # self.Est_MwS = MwS
+                        # self.Est_MnS = MnS
+                        # self.Est_MwL = MwL
+                        # self.Est_MnL = MnL
+                        # self.Est_phiL = phiL_pred
+                        # self.Est_phiS = phiS_pred
+                        # self.Est_PDIL = PDI
+                        # self.Est_PDIS = PDI
                         self.PDI_change_button.setVisible(True)
-                        self.prediction = prediction_np.copy()
+                        # self.prediction = prediction_np.copy()
                 any_success = True
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"There was an error with model {model_file}: {e}")
@@ -1125,12 +1129,13 @@ class MainWindow(QMainWindow):
                 mean_Mn = format_e(Decimal(np.mean(mn_list)))
                 mean_Mw = format_e(Decimal(np.mean(mw_list)))
                 mean_PDI = f"{np.mean(pdi_list):.2f}"
-                self.model_stats_dict["Mean"] = [mean_Mn, mean_Mw, mean_PDI]
-            else:
-                mean_MwS = format_e(Decimal(np.mean([float(pred.split()[2]) for pred in self.model_stats_dict.values() if pred != "Mean"])))
-                mean_MwL = format_e(Decimal(np.mean([float(pred.split()[5]) for pred in self.model_stats_dict.values() if pred != "Mean"])))
-                mean_phiS = np.mean([float(pred.split()[2])/100 for pred in self.model_stats_dict.values() if pred != "Mean"])
-                mean_phiL = np.mean([float(pred.split()[5])/100 for pred in self.model_stats_dict.values() if pred != "Mean"])
+                self.model_stats_dict["Mean"] = [f"{mean_Mn} (g/mol)", f"{mean_Mw} (g/mol)", mean_PDI]
+        elif len(MwS_list) > 1:    
+            if self.class_to_use == 2:
+                mean_MwS = format_e(Decimal(np.mean(MwS_list)))
+                mean_MwL = format_e(Decimal(np.mean(MwL_list)))
+                mean_phiS = np.mean(phiS_list)
+                mean_phiL = np.mean(phiL_list)
                 PDI = f"{np.mean(pdi_list):.2f}"
                 self.model_stats_dict["Mean"] = [
                         f"Component 1 (Mw): {mean_phiS*100:.2f}% {mean_MwS} (g/mol)",
@@ -1545,8 +1550,8 @@ class MainWindow(QMainWindow):
             msg_box.setText("Do you want to save the cleaned prediction or the original prediction?")
             cleaned_button = msg_box.addButton("Cleaned Prediction", QMessageBox.YesRole)
             original_button = msg_box.addButton("Original Prediction", QMessageBox.NoRole)
-            if msg_box.exec_() == QDialog.Rejected:
-                return
+            msg_box.exec_()
+                
             
             
             predictions_dict = getattr(self, 'predictions_dict', None)
@@ -1625,26 +1630,30 @@ class MainWindow(QMainWindow):
             try:
                 try:
                     if self.class_to_use == 0 or self.class_to_use == 1:
-                        if self.cleaned_pred and msg_box.clickedButton() == cleaned_button:
-                            with open(file_path, 'w') as file:
-                                file.write(f"Mn = {self.cleaned_Est_Mn:.2f} (g/mol),")
-                                file.write(f"Mw = {self.cleaned_Est_Mw:.2f} (g/mol),")
-                                file.write(f"PDI = {self.cleaned_Est_PDI:.2f},\n")
-                                np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
+                        if self.cleaned_pred:
+                            if msg_box.clickedButton() == cleaned_button:
+                                with open(file_path, 'w') as file:
+                                    file.write(f"Mn = {self.model_stats_dict[selected_label][0]}, ")
+                                    file.write(f"Mw = {self.model_stats_dict[selected_label][1]}, ")
+                                    file.write(f"PDI = {self.model_stats_dict[selected_label][2]},\n")
+                                    np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
+                            else:
+                                with open(file_path, 'w') as file:
+                                    file.write(f"Mn = {self.original_model_stats_dict[selected_label][0]}, ")
+                                    file.write(f"Mw = {self.original_model_stats_dict[selected_label][1]}, ")
+                                    file.write(f"PDI = {self.original_model_stats_dict[selected_label][2]},\n")
+                                    np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
                         else:
                             with open(file_path, 'w') as file:
-                                file.write(f"Mn = {self.Est_Mn:.2f} (g/mol),")
-                                file.write(f"Mw = {self.Est_Mw:.2f} (g/mol),")
-                                file.write(f"PDI = {self.Est_PDI:.2f},\n")
+                                file.write(f"Mn = {self.model_stats_dict[selected_label][0]}, ")
+                                file.write(f"Mw = {self.model_stats_dict[selected_label][1]}, ")
+                                file.write(f"PDI = {self.model_stats_dict[selected_label][2]},\n")
                                 np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
                     elif self.class_to_use == 2:
                         with open(file_path, 'w') as file:
-                            file.write(f"Component 1 (Mw) = {self.Est_MwS:.2f} (g/mol),")
-                            file.write(f" Volume Fraction 1 = {self.Est_phiS:.2f},")
-                            file.write(f" PDI 1 = {self.Est_PDIS:.2f},\n")
-                            file.write(f"Component 2 (Mw) = {self.Est_MwL:.2f} (g/mol),")
-                            file.write(f" Volume Fraction 2 = {self.Est_phiL:.2f},")
-                            file.write(f" PDI 2 = {self.Est_PDIL:.2f},\n")
+                            file.write(f"{self.model_stats_dict[selected_label][0]}\n")
+                            file.write(f"{self.model_stats_dict[selected_label][1]}\n")
+                            file.write(f"{self.model_stats_dict[selected_label][2]}\n")
                             np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
                 except:
                     with open(file_path, 'w') as file:
@@ -1654,7 +1663,7 @@ class MainWindow(QMainWindow):
 
     def clean_up_pred(self):
         dialog = QDialog()
-        dialog.setWindowTitle("Clean MWD")
+        dialog.setWindowTitle("Clean MWD Prediction(s)")
         if self.app.is_dark:
             dialog.setStyleSheet(themes['dark_window'])
         else:
@@ -1741,6 +1750,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
         dialog.setLayout(layout)
         if dialog.exec_() == QDialog.Accepted:
+            if self.cleaned_pred:
+                if hasattr(self, 'cleaned_predictions_dict'):
+                    for label in self.cleaned_predictions_dict.keys():  
+                        self.canvas.remove_single_plot(f"Predicted {label} (cleaned)")
             min_x, max_x = None, None
             if method_dropdown.currentText() == "Min/Max M Range":
                 try:
@@ -1814,18 +1827,32 @@ class MainWindow(QMainWindow):
             self.canvas.remove_single_plot(f"Predicted {label}")
             self.canvas.plot_line_on_axes2(m, cleaned_curve, linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
         self.canvas.autoscale_plot2()
-        
+        self.original_model_stats_dict = self.model_stats_dict.copy()
         self.model_stats_dict = {}
+        mn_list, mw_list, pdi_list = [], [], []
+
         for label, cleaned_curve in self.cleaned_predictions_dict.items():
             Mn = 1 / np.trapz(cleaned_curve * np.exp(-x), x=x)
             Mw = np.trapz(cleaned_curve * np.exp(x), x=x)
             PDI = Mw / Mn
+            mn_list.append(Mn)
+            mw_list.append(Mw)
+            pdi_list.append(PDI)
             def format_e(n):
                 a = '%E' % n
                 return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            self.model_stats_dict[label] = [format_e(Decimal(Mn)), format_e(Decimal(Mw)), f"{PDI:.2f}"]
+            self.model_stats_dict[label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
         #self.predicted_stats_window = StatsWindow("Predicted MWD Stats", self.model_stats_dict, parent=self)
-        
+        if len(mn_list) > 1:
+            def format_e(n):
+                a = '%E' % n
+                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
+            if self.class_to_use == 0:
+                mean_Mn = format_e(Decimal(np.mean(mn_list)))
+                mean_Mw = format_e(Decimal(np.mean(mw_list)))
+                mean_PDI = f"{np.mean(pdi_list):.2f}"
+                self.model_stats_dict["Mean"] = [f"{mean_Mn} (g/mol)", f"{mean_Mw} (g/mol)", mean_PDI]
+
         self.cleaned_pred = True
         self.undo_tails_correct_button.setVisible(True)
         if hasattr(self, 'predicted_stats_window') and self.predicted_stats_window is not None:
@@ -1845,16 +1872,31 @@ class MainWindow(QMainWindow):
         self.canvas.autoscale_plot2()
         
         self.model_stats_dict = {}
+        mn_list, mw_list, pdi_list = [], [], []
+
         for label, curve in self.original_predictions_dict.items():
             Mn = 1 / np.trapz(curve * np.exp(-x), x=x)
             Mw = np.trapz(curve * np.exp(x), x=x)
             PDI = Mw / Mn
+            mn_list.append(Mn)
+            mw_list.append(Mw)
+            pdi_list.append(PDI)
             def format_e(n):
                 a = '%E' % n
                 return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            self.model_stats_dict[label] = [format_e(Decimal(Mn)), format_e(Decimal(Mw)), f"{PDI:.2f}"]
+            self.model_stats_dict[label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
         #self.predicted_stats_window = StatsWindow("Predicted MWD Stats", self.model_stats_dict, parent=self)
         
+        if len(mn_list) > 1:
+            def format_e(n):
+                a = '%E' % n
+                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
+            if self.class_to_use == 0:
+                mean_Mn = format_e(Decimal(np.mean(mn_list)))
+                mean_Mw = format_e(Decimal(np.mean(mw_list)))
+                mean_PDI = f"{np.mean(pdi_list):.2f}"
+                self.model_stats_dict["Mean"] = [f"{mean_Mn} (g/mol)", f"{mean_Mw} (g/mol)", mean_PDI]
+                
         self.cleaned_pred = False
         self.undo_tails_correct_button.setVisible(False)
         if hasattr(self, 'predicted_stats_window') and self.predicted_stats_window is not None:
