@@ -152,7 +152,7 @@ If the relaxation spectrum is fit correctly, you are now ready to pass the data 
 
 ### 4. MWD Classification
 
-If you know that the rheology data you have corresponds to a polydisperse polymer melt, you can skip this step. If you know that it is either monodisperse or bidisperse, please select the correct option from the "Select MWD Class for prediction" dropdown menu and continue to the next step.
+If you know that the rheology data you have corresponds to a polydisperse polymer melt, you can skip this step. If you know that it is either monodisperse or bidisperse, please select the correct option from the "Select MWD Class for prediction" dropdown menu (under the MWD plot) and continue to the next step.
 
 However, if you are unsure about the class of MWD of your sample, you can use the classification function of this software to asses this. To initiated this, please press the "Classify MWD" button on the left of the screen. This will automatically use all of the avaialable classification models in the "NN_models" directory to classify the polymer's MWD into one of the three MWD classes mentioned.
 
@@ -160,19 +160,21 @@ The result will be presented below the plots panel, and the fraction of the numb
 
 ### 5. Make prediction
 
-At this point, you should have loaded rheology data, converted to universal space, fit a relaxation spectrum, and know what class of MWD to use. The next step is to make a MWD prediction. Make sure the correct class is selected in the "Select MWD Class for Prediction" dropdown, below the MWD plot.
+At this point, you should have loaded rheology data, converted to universal space, fit a relaxation spectrum, and know what class of NN to use. The next step is to make a MWD prediction. Make sure the correct class is selected in the "Select MWD Class for Prediction" dropdown, below the MWD plot.
 
-First, press the "Select NN Model" button. This will open a dialog, with a dropdown menu displaying all of the models for the MWD class you have selected. Multiple options are given as NNs will give slightly different results even if trained identically. Select one of the models from the dropdown, and confirm by pressing "ok". The name of this model should be displayed at the bottom of your screen. Next, press "Make MWD Prediction". This may take a moment, but after the prediction is made, it will be displayed on the right plot of the plots panel.
+First, press the "Select NN Model" button. This will open a dialog, with a menu displaying all of the models for the MWD class you have selected. Multiple options are given as NNs will give slightly different results even if trained identically. Select one or more of the models from the menu by clicking on each, and confirm by pressing "ok". The name of the loaded models should now be displayed at the bottom of your screen. Next, press "Make MWD Prediction". This may take a moment, but after the prediction of each loaded model is made, it will be displayed on the MWD plot.
 
-You can now view the predicted statistics with the "Predicted MWD Stats" button, save the prediction as a text file, save the figure, or clean up the prediction before any of these options.
+You can now view the predicted statistics with the "Predicted MWD Stats" button. This contains a dropdown menu to toggle which model you wish to view statistics for. There is also an option to view mean statistics for all models used. You can also save the prediction as a text file, save the figure, or clean up the prediction before any of these options.
 
-To clean the prediction, press the button that has appeared on the left of your screen marked "Clean Prediction". You will be prompted to enter a threshold, or alternatively a min/max x range. These options will remove non-zero values of the prediction below the threshold or outside the x range respectively. This is because occasionally the NN predicts low volume-fraction components where they are unlikely to be, which will affect statistics such as Mn, but not noticeably affect the rheology. The MWD will be renormalised after this is done, and can be undone afterwards with a corresponding button that will appear. 
+To clean any prediction, press the button that has appeared on the left of your screen marked "Clean Prediction". You will be prompted to enter a threshold, or alternatively a min/max x range. These options will remove non-zero values of the prediction below the threshold or outside the x range respectively. This is because occasionally the NN predicts low volume-fraction components where they are unlikely to be, which will affect statistics such as Mn, but not noticeably affect the rheology. There is also an option to redistribute mass below some limit. This involves keeping a tally of the mass removed from outside the set min/max, and adding it back to distribution within the new limits. This may be a better representation of the MWD, but should be considered on a case-by-case basis. The MWD will be renormalised after this is done, and this cleaning can be undone afterwards with a corresponding button that will appear. 
 
 ### 6. Compare with GPC
 
 If you want to test the prediction against experimental GPC results, you can load the GPC file using the button on the left of the window. The file format must be made compatible with the software to be loaded correctly. For polydisperse samples, this should be M (g/mol) or log10M in the left column, and dW/dlogM in the right column. Normalisation will be done on loading so do not worry about this. This will then be plotted on the MWD plot.
 
 For monodisperse and bidisperse samples, the file format is different. Each component (1 or 2 respectively) should be on a single row. The columns go as: volume fraction   Mw  PDI. The file should be tab delimited. This will plot the components as if they are narrow log-normal distributions, although this assumption will not be valid for slightly higher dispersities (e.g. >1.1).
+
+Alternatively, you can load an MWD curve from known statistics for comparison with the NN predictions. Do this by selecting the "from statistics" option instead of "from file". Log-normal and Flory distributions can be compared easily. 
 
 Stats are also calculated for the loaded GPC and can be seen by pressing the "GPC Stats" button. 
 
