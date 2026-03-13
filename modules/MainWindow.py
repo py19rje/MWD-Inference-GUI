@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
         
         labels_layout = QVBoxLayout()
         
-        label_size = (500, 20)  
+        label_size = (750, 20)  
         self.model_label.setFixedSize(*label_size)
         self.rheo_label.setFixedSize(*label_size)
         self.GPC_label.setFixedSize(*label_size)
@@ -890,6 +890,7 @@ class MainWindow(QMainWindow):
             selected_display_names = [item.text() for item in selected_items]
             self.models = []
             loaded_model_names = []
+            reduced_names = []
             for selected_display_name in selected_display_names:
                 selected_file = f"{selected_display_name}.pth"
                 file_path = os.path.join(directory, selected_file)
@@ -905,12 +906,36 @@ class MainWindow(QMainWindow):
                     model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
                     model.eval()
                     self.models.append(model)
+                    
                     loaded_model_names.append(selected_file)
+                    
+                    reduced_name = selected_display_name
+                    if "_" in selected_display_name:
+                        prefix, suffix = selected_display_name.split("_", 1)
+                        if prefix in ["Polydisperse", "Bidisperse", "Monodisperse"]:
+                            i = ''.join([c for c in suffix if c.isdigit()])
+                            if prefix == "Polydisperse":
+                                prefix_short = "Poly"
+                            elif prefix == "Bidisperse":
+                                prefix_short = "Bi"
+                            elif prefix == "Monodisperse":
+                                prefix_short = "Mono"
+                            else:
+                                prefix_short = prefix
+                            if i:
+                                reduced_name = f"{prefix_short}_{i}"
+                            else:
+                                reduced_name = prefix_short
+                        else:
+                            reduced_name = selected_display_name
+                    else:
+                        reduced_name = selected_display_name
+                    reduced_names.append(reduced_name)
                 except Exception as e:
                     QMessageBox.warning(self, "Error", f"Failed to load model '{selected_file}': {e}")
             if self.models:
                 self.model_loaded = True
-                self.model_label.setText(f"Loaded models: {', '.join(loaded_model_names)}")
+                self.model_label.setText(f"Loaded models: {', '.join(reduced_names)}")
             else:
                 self.model_loaded = False
                 self.model_label.setText("No NN model selected")
