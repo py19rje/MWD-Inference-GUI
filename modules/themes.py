@@ -29,6 +29,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this software.  If not, see <http://www.gnu.org/licenses/>.
 
+#  This work forms part of the research programme of DPI, project \#861.
+
 #  --------------------------------------------------------------------------------------------------------
 
 themes = {

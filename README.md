@@ -2,7 +2,8 @@
 
 ## Overview
 
-This repository contains code for a Python project that includes a graphical user interface (GUI) for MWD inference tasks. Follow the instructions below to set up your environment and run the `Inference_GUI.py` file.
+This repository contains code for a graphical user interface (GUI) for MWD inference tasks. Follow the instructions below to set up your environment and run the `Inference_GUI.py` file. This work forms part of the research programme of DPI, project \#861.
+
 
 ## Prerequisites
 
