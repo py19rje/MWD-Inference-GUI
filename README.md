@@ -123,6 +123,8 @@ This GUI is for the task of inferring the molecular weight distribution (MWD) fr
 
 Therefore, most of the workflow is centered on loading rheology and making it ready for input into the models. The following will detail how to do this.
 
+Please note: This software is designed to predict the MWD of flexible, well-entangled polymers. If the rheology of your sample cannot be quantitatively predicted by the tube model encoded with LP2R (https://github.com/chinmaydaslds/LP2R), this software will likewise struggle. Also, please be careful to use tube model parameters appropriate to this model, which can be found for new samples by fitting LP2R outputs to the rheology of a sample with known MWD.
+
 ### 1. Loading Rheology Data
 
 Rheology data files can be loaded using the corresponding button on the function column to the left of thr UI. Please ensure the datafiles are in the correct format. This format should comprise of three columns: frequency in rad/s, G' in Pa, G'' in Pa. Column headers are fine but will be skipped, so please ensure the columns are in this order. Columns should be tab delimited. 
