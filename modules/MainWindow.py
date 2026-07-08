@@ -567,7 +567,7 @@ class MainWindow(QMainWindow):
         
     def load_rheo_file(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Rheology File", "data", "All Files (*);;Text Files (*.txt)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open Rheology File", "data/Rheo_Data", "All Files (*);;Text Files (*.txt)", options=options)
         if not file_path:
             return
         file_name = os.path.basename(file_path)
@@ -1248,7 +1248,7 @@ class MainWindow(QMainWindow):
     
     def load_GPC_file(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Load GPC file - .dat format", "data", "All Files (*);;Text Files (*.txt)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Load GPC file - .dat format", "data/MWD_Data", "All Files (*);;Text Files (*.txt)", options=options)
         if file_path:
             prediction_made = self.prediction_made
             self.canvas.clear_plot2()
