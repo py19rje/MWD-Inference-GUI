@@ -44,7 +44,7 @@ Run the following code in the Anaconda Prompt or Terminal to make the working di
 cd MWD-Inference-GUI
 ```
 
-### 4. 
+### 4. Dependencies
 #### Option 1: Create and activate a conda environment (preferred):
 Running the code below will create a new conda environment with a specified version of python and the required packages. This may take some time. The name can be changed freely by editing the first line of the .yml file, but ensure that it is likewise changed for the activation step.
 ```bash
