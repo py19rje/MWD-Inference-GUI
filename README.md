@@ -110,6 +110,11 @@ On Linux/macOS:
 ```bash
 <venv_name>/bin/python Inference_GUI.py
 ```
+or:
+```bash
+source <venv_name>/bin/activate
+python Inference_GUI.py
+```
 
 #### c). From runfile (requires setup)
 For future use, to avoid having to open the terminal and activate the conda environment every time you want to run the GUI, there is a way of loading the GUI automatically without the command line by running an executable file. 
