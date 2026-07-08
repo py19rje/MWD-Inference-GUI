@@ -40,10 +40,10 @@ echo Launching...
 echo This may take a few minutes
 
 REM Activate Conda Environment
-call C:\Users\py19rje\AppData\Local\anaconda3\Scripts\activate.bat C:\Users\py19rje\AppData\Local\anaconda3\envs\MWD_Inference_ENV
+call C:\path\to\anaconda\...\Scripts\activate.bat C:\path\to\anaconda\...\envs\MWD_Inference_ENV
 
 REM Run Python script
-cd C:\Users\py19rje\Documents\GUI_test\
+cd C:\path\to\MWD_Inference-GUI
 start "" pythonw Inference_GUI.py
 REM python Inference_GUI.py
 

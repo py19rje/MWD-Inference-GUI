@@ -44,7 +44,7 @@ echo "This may take a few minutes"
 source /opt/anaconda3/bin/activate /opt/anaconda3/envs/MWD_Inference_ENV
 
 # Run Python script
-cd /Users/simon/Documents/RobTesting2/GUI_test/
+cd /path/to/MWD_Inference-GUI
 python Inference_GUI.py &
 
 if [ $? -ne 0 ]; then

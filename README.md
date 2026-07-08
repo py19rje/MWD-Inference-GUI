@@ -44,7 +44,8 @@ Run the following code in the Anaconda Prompt or Terminal to make the working di
 cd MWD-Inference-GUI
 ```
 
-### 4. Create and activate a conda environment:
+### 4. 
+#### Option 1: Create and activate a conda environment (preferred):
 Running the code below will create a new conda environment with a specified version of python and the required packages. This may take some time. The name can be changed freely by editing the first line of the .yml file, but ensure that it is likewise changed for the activation step.
 ```bash
 conda env create -f GUI_env.yml
@@ -54,13 +55,63 @@ Run the line below to activate the conda environment you have just created. This
 conda activate MWD_Inference_ENV
 ```
 
+#### Option 2: Use pip installation:
+If you do not wish to use conda, you can create a venv virtual environment using python. First, make sure python 3.11.5 is installed from the official Python website. During installation, enable "Add Python to PATH". Confirm the installation:
+
+On Windows (in the command prompt):
+```bash
+<path\to\python3.11.5 python.exe file> --version
+```
+
+On Linux / macOS (in the terminal):
+```bash
+python3.11 --version
+```
+
+If Python 3.11 is not available, install it first with your package manager or a version manager such as pyenv. Following installation, create a venv environment, replacing <venv_name> with your desired name:
+
+On Windows (within the MWD-Inference-GUI directory):
+```bash
+<path\to\python3.11.5 python.exe file> -m venv <venv_name>
+<venv_name>\Scripts\python -m pip install --upgrade pip
+<venv_name>\Scripts\python -m pip install -r requirements.txt
+```
+
+On Linux/macOS:
+```bash
+python3.11 -m venv <venv_name>
+source <venv_name>/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+If the pip install went smoothly, your virtual environment should be set up with all dependencies to run the GUI.
+
 ### 5. Run the user interface
-#### a). From the anaconda prompt
+#### a). From the anaconda prompt (if conda used)
 If there have been no issues with the previous steps, you should be ready to launch the user interface. To do so, run the following command, making sure that you are still in the directory of the repository, and that the python environment is activated:
 ```bash
 python Inference_GUI.py
 ```
-#### b). From runfile (requires setup)
+#### b). From venv:
+If there have been no issues with the previous steps, you should be ready to launch the user interface. To do so, run the following command, making sure that you are still in the directory of the repository.
+
+On Windows:
+```bash
+<venv_name>\Scripts\python Inference_GUI.py
+```
+or:
+```bash
+<venv_name>\Scripts\activate 
+python Inference_GUI.py
+```
+
+On Linux/macOS:
+```bash
+<venv_name>/bin/python Inference_GUI.py
+```
+
+#### c). From runfile (requires setup)
 For future use, to avoid having to open the terminal and activate the conda environment every time you want to run the GUI, there is a way of loading the GUI automatically without the command line by running an executable file. 
 
 Windows:
@@ -73,7 +124,7 @@ Find the line "call C:\path\to\anaconda\...". This line contains two filepaths. 
 conda info --envs
 ```
 
-This should return all your conda environments and their locations on your machine. Copy the path to the MWD_Inference_ENV environment to replace the second filepath on the line.
+This should return all your conda environments and their locations on your machine. Copy the path to the MWD_Inference_ENV environment to replace the second filepath on the line. Then update the line "cd C:\path\to\MWD_Inference-GUI" to reflect the true path to the working directory (this cloned repository).
 
 Once you have updated these lines in the .bat file, you can simply run it by double clicking etc.. This should activate the conda environment for you and load the GUI, and hence not require manual environment activation for every use. It is also possible to create a shortcut to this .bat file on your homescreen and set an icon (recommend the .ico file /graphics/NN.ico). 
 
@@ -98,7 +149,7 @@ conda info -envs
 
 Make sure the filepath in the .command file matches the path returned for the environment you have made.
 
-Next, find the line "cd /Users/...". Replace the filepath with the path to the directory you have cloned from Github that contains the file Inference_GUI.py and the .command file you are editing. The next step is to make the file executable. Do this by changing directory into the main directory and running the following command:
+Next, find the line "cd /path/...". Replace the filepath with the path to the directory you have cloned from Github that contains the file Inference_GUI.py and the .command file you are editing. The next step is to make the file executable. Do this by changing directory into the main directory and running the following command:
 
 ```bash
 chmod +x Run_GUI.command

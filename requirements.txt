@@ -1,0 +1,14 @@
+matplotlib==3.8.4
+numpy==1.24.3
+scipy==1.13.1
+PyQt5==5.15.10
+torch==2.5.1
+protobuf==3.20.3
+dm-tree
+namex
+regex
+click
+psutil
+toml
+tqdm
+markdown
