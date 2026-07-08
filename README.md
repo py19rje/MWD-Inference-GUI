@@ -181,6 +181,8 @@ Therefore, most of the workflow is centered on loading rheology and making it re
 
 Please note: This software is designed to predict the MWD of flexible, well-entangled polymers. If the rheology of your sample cannot be quantitatively predicted by the tube model encoded with LP2R (https://github.com/chinmaydaslds/LP2R), this software will likewise struggle. Also, please be careful to use tube model parameters appropriate to this model, which can be found for new samples by fitting LP2R outputs to the rheology of a sample with known MWD.
 
+The data included here is for testing and for the purposes of reproducing the results of the related article by Robert J. Elliott, Luisa Cutillo, Johan Mattsson and Daniel J. Read. All rheology files include some metadata to inform the user of the measurement temperature and material type. This is not required for new data files, but is simply to aid in the use of these files. GPC data is included for a number of polydisperse samples, and MWD data is included for a number of monodisperse and bidisperse samples, the file format for which is discussed below in the section "Compare with GPC".
+
 ### 1. Loading Rheology Data
 
 Rheology data files can be loaded using the corresponding button on the function column to the left of thr UI. Please ensure the datafiles are in the correct format. This format should comprise of three columns: frequency in rad/s, G' in Pa, G'' in Pa. Column headers are fine but will be skipped, so please ensure the columns are in this order. Columns should be tab delimited. 
