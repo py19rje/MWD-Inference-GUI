@@ -54,7 +54,6 @@ from NN_models.PytorchPoly_model import PolyModel
 from NN_models.PytorchBinary_model import BinaryModel
 from NN_models.PytorchMono_model import MonoModel
 from NN_models.PytorchClassifier_model import ClassifierModel
-from scipy.integrate import simpson as simps
 from decimal import Decimal
 from modules.themes import themes
 from modules.PlotCanvas import PlotCanvas
@@ -65,50 +64,15 @@ from modules.GPCStatsWindow import GPCStatsWindow
 from modules.CheckableComboBox import CheckableComboBox
 from modules.help_dialog import HelpDialog
 import re
-
-def flory_schulz(m, Mn):
-    return m/(Mn**2) * np.exp(-m/Mn)
-
-def lognormal(x, mean, sigma):
-    return (1/np.sqrt(2*math.pi*sigma**2)) * np.exp(-(np.log(x) - mean)**2 / (2 * sigma**2))
-  
-def sum_of_lognormals(x, *weights):
-    result = np.zeros(len(x))
-    for i in range(num_params):
-        result = result + (weights[0][i] * lognormal(x, means[i], sigma_poly))
-    return result
-
-def sum_of_lognormals_Z(x, *weights):
-    if isinstance(weights[0], (list, np.ndarray)):  
-        weights = weights[0]
-    result = np.zeros(len(x))
-
-    for i in range(num_params2):
-        result = result + (weights[i] * lognormal(x, means_Z[i], sigma_poly))
-    return result
-
-
-M_e_PE = 820
-
-num_params = 28
-num_params2 = 34
-
-means = np.linspace(np.log(0.1*M_e_PE), np.log(10000*M_e_PE), num_params) 
-known_means = np.linspace(np.log(10*M_e_PE), np.log(1000*M_e_PE), 7) 
-means_ratio = np.exp(means[1])/np.exp(means[0])
-known_means_ratio = np.exp(known_means[1])/np.exp(known_means[0])
-sigma_poly = 0.55 * (means_ratio/known_means_ratio)
-
-means_Z = np.linspace(np.log(8e-3), np.log(8e+3), num_params2)
-
-m = np.logspace(2,7,num=300,base=10)
-x = np.log(m)
-
-PREDICTION_COLORS = [
-    'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'olive', 'navy', 'teal'
-]
-
-pred_alpha = 0.6
+from modules.utils import format_e, flory_schulz, lognormal, sum_of_lognormals_Z, G_concat_fit, means_Z, sigma_poly, PREDICTION_COLORS, pred_alpha, m, x
+from modules.rheo_file_parser import parse_rheo_file
+from modules.MaxwellFit import fit_maxwell_spectrum
+from modules.model_loader import find_model_files, load_models, CLASS_LABEL
+from modules.prediction import make_prediction_curve, build_prediction_tensor
+from modules.MWD_file_parser import parse_mwd_file
+from modules.MWD_funcs import build_flory_gpc, build_lognormal_gpc
+from modules.prediction_file_saver import write_prediction_file
+from modules.prediction_cleaner import clean_prediction_curve, clean_predictions
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -386,7 +350,6 @@ class MainWindow(QMainWindow):
             self.canvas.draw_idle()
         self.update()
         QApplication.processEvents()
-
     
     def add_checkbox(self, label, axis):
         checkbox_dict = self.checkbox_dict_ax1 if axis == "ax1" else self.checkbox_dict_ax2
@@ -408,7 +371,6 @@ class MainWindow(QMainWindow):
         if label in checkbox_dict:
             self.dynamic_plot_dropdown.remove_checkbox(label)
             del checkbox_dict[label]
-        
 
     def toggle_plot(self, label, axis, state):
         visible = state == 2  # 2 means Checked, 0 means Unchecked
@@ -418,7 +380,6 @@ class MainWindow(QMainWindow):
         elif axis == "ax2":
             self.canvas.autoscale_plot2()
         QApplication.processEvents()
-        
                 
     def switch_theme(self):
         if not self.app.is_dark:
@@ -561,9 +522,7 @@ class MainWindow(QMainWindow):
                 break
         
     def on_dropdown_change(self, selected_text):
-        
         self.class_to_use = self.value_map.get(selected_text, -1)
-        
         
     def load_rheo_file(self):
         options = QFileDialog.Options()
@@ -571,111 +530,45 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
         file_name = os.path.basename(file_path)
-        
-        self.rheo_label.setText(f"Loaded Rheology: {file_name}")
-        
-        unsorted_Gp_data_Exp = []
-        unsorted_Gpp_data_Exp = []
-        unsorted_w_values_Exp = []
-        
-        negative_w_indices = []
-        negative_Gp_indices = []
-        negative_Gpp_indices = []
-        
-        with open(file_path, 'r') as file:
-            lines = file.readlines()
-        
-            
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue  
-            
-            values = re.split(r'[,\s]+', line)
-    
-            if len(values) < 3:
-                continue
-    
-            try:
-                value1 = float(values[0])
-                value2 = float(values[1])
-                value3 = float(values[2])
-            except ValueError:
-                if i == 0:  
-                    continue
-                QMessageBox.warning(self, "Error", f"Invalid data in row {i+1}: Non-numeric values detected.\nPlease ensure file is in the correct format.")
-                return
-            if value1 <= 0:
-                negative_w_indices.append(i+1)
-            if value2 <= 0:
-                negative_Gp_indices.append(i+1)
-            if value3 <= 0:
-                negative_Gpp_indices.append(i+1)
-            
-            unsorted_w_values_Exp.append(value1)
-            unsorted_Gp_data_Exp.append(value2)
-            unsorted_Gpp_data_Exp.append(value3)
-            
-        warning_msgs = []
-        if negative_w_indices:
-            warning_msgs.append(f"Negative frequency (ω) values found at line(s): {', '.join(map(str, negative_w_indices))}")
-        if negative_Gp_indices:
-            warning_msgs.append(f"Negative G' values found at line(s): {', '.join(map(str, negative_Gp_indices))}")
-        if negative_Gpp_indices:
-            warning_msgs.append(f"Negative G'' values found at line(s): {', '.join(map(str, negative_Gpp_indices))}")
-        if warning_msgs:
+        result = parse_rheo_file(file_path)
+        if result.get("error"):
+            QMessageBox.warning(self, "Error", result["error"])
+            return
+
+        # if there are warnings, show the same warning dialog flow you had before
+        if result["warnings"]:
             msg_box = QMessageBox(self)
             msg_box.setIcon(QMessageBox.Warning)
             msg_box.setWindowTitle("Warning")
-            msg_box.setText("\n".join(warning_msgs) + "\n\nDo you want to ignore these rows and continue loading the rest of the data?\n\nChoose 'Ignore' to skip the problematic rows, or 'Cancel' to fix the file yourself and try again.")
+            msg_box.setText("\n".join(result["warnings"]) + "\n\nIgnore these rows and continue?")
             ignore_button = msg_box.addButton("Ignore", QMessageBox.AcceptRole)
             cancel_button = msg_box.addButton("Cancel", QMessageBox.RejectRole)
             msg_box.exec_()
             if msg_box.clickedButton() == cancel_button:
                 return
 
+        self.rheo_label.setText(f"Loaded Rheology: {file_name}")
+        self.w_values_Exp = result["w"]
+        self.Gp_data_Exp = result["Gp"]
+        self.Gpp_data_Exp = result["Gpp"]
 
-        filtered_w = []
-        filtered_Gp = []
-        filtered_Gpp = []
-        for i in range(len(unsorted_w_values_Exp)):
-            if unsorted_w_values_Exp[i] > 0 and unsorted_Gp_data_Exp[i] > 0 and unsorted_Gpp_data_Exp[i] > 0:
-                filtered_w.append(unsorted_w_values_Exp[i])
-                filtered_Gp.append(unsorted_Gp_data_Exp[i])
-                filtered_Gpp.append(unsorted_Gpp_data_Exp[i])
-                
-        unsorted_w_values_Exp = np.array(filtered_w)
-        unsorted_Gp_data_Exp = np.array(filtered_Gp)
-        unsorted_Gpp_data_Exp = np.array(filtered_Gpp)
-        
-        if len(unsorted_w_values_Exp) == 0:
-            QMessageBox.warning(self, "Error", "No valid data found in the file.\nPlease ensure file is a rheology file in the correct format.")
-            return
-        
-        sorted_indices = np.argsort(unsorted_w_values_Exp)
-        self.w_values_Exp = unsorted_w_values_Exp[sorted_indices]                 
-        self.Gp_data_Exp = unsorted_Gp_data_Exp[sorted_indices] 
-        self.Gpp_data_Exp = unsorted_Gpp_data_Exp[sorted_indices] 
-        
-        self.original_w_values_Exp = self.w_values_Exp[:]
-        self.original_Gp_data_Exp = self.Gp_data_Exp[:]
-        self.original_Gpp_data_Exp = self.Gpp_data_Exp[:]
-        
+        # preserve originals
+        self.original_w_values_Exp = self.w_values_Exp.copy()
+        self.original_Gp_data_Exp = self.Gp_data_Exp.copy()
+        self.original_Gpp_data_Exp = self.Gpp_data_Exp.copy()
+
+        # plotting (unchanged)
         self.canvas.clear_plot1()
         self.canvas.change_axes_plot1(r'$\omega$ (rad/s)', r"G', G'' (Pa)")
-        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth = 1, label = "G' Input", size = 20)
-        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth = 1, label = "G'' Input", size = 20)
-        
-        
+        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth=1, label="G' Input", size=20)
+        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth=1, label="G'' Input", size=20)
         self.canvas.autoscale_plot1()
         self.rheo_data_loaded = True
-            
     
     def univ_norm(self):
         if not self.rheo_data_loaded:
             QMessageBox.warning(self, "Error", "Please load the rheology data first before attempting to perform shift.")
             return 
-        
         
         dialog = UnivDialog(self)
         
@@ -693,9 +586,7 @@ class MainWindow(QMainWindow):
                  
             self.M_e = inputs["M_e"]
             self.G0 = inputs["G0"]
-            self.tau_e = inputs["tau_e"]
-
-        
+            self.tau_e = inputs["tau_e"]        
         
         self.z = m / self.M_e
         
@@ -704,10 +595,7 @@ class MainWindow(QMainWindow):
         self.w_values_Exp = self.w_values_Exp * self.tau_e
         self.Gp_data_Exp = self.Gp_data_Exp / self.G0
         self.Gpp_data_Exp = self.Gpp_data_Exp / self.G0
-        
-
-        
-        
+                
         self.canvas.clear_plot1()
         
         self.canvas.change_axes_plot1(r'$\omega$ * $\tau_e$', r"$G' / G_N^0$, $G'' / G_N^0$")
@@ -715,12 +603,9 @@ class MainWindow(QMainWindow):
         self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth = 1, label = "G' Input Univ", size = 20)
         self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth = 1, label = "G'' Input Univ", size = 20)
             
-            
         self.canvas.autoscale_plot1() 
         
         self.univ_space = True
-
-        
            
     def Maxwell_Fitting(self):
         
@@ -731,129 +616,43 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Please convert rheology to universal space before fitting Maxwell modes.")
             return
         
-        def G_prime_fit(w_alpha, g_values):
-            sum_over_i = 0.0
-            w_squared = w_alpha*w_alpha
-            numerator = g_values * tau_values * tau_values
-            denom = 1 + (w_squared * tau_values * tau_values)
-            to_sum = numerator/denom
-            sum_over_i = np.sum(to_sum)
-            G_prime_for_alpha = w_squared * sum_over_i
-            return G_prime_for_alpha
-
-        def G_dub_prime_fit(w_alpha, g_values):
-            sum_over_j = 0.0
-            w_squared = w_alpha*w_alpha
-            numerator = g_values * tau_values
-            denom = 1 + (w_squared * tau_values * tau_values)
-            to_sum = numerator/denom
-            sum_over_j = np.sum(to_sum)
-            G_dub_prime_for_alpha = w_alpha * sum_over_j
-            return G_dub_prime_for_alpha
-
-        def G_concat_fit(w_values, *log_g_values):
-            log_g_second_diffs = np.array([])
-            for i in range(len(log_g_values)-2):
-                g_i_second_diff = log_g_values[i+2] + log_g_values[i] - 2*log_g_values[i+1]
-                log_g_second_diffs = np.append(log_g_second_diffs, g_i_second_diff)
-            g_values = np.exp(log_g_values)
-            G_prime_fit_values = np.array([])
-            G_dub_prime_fit_values = np.array([])
-            for alpha in w_values:
-                G_prime_max = G_prime_fit(alpha, g_values)
-                G_prime_fit_values = np.append(G_prime_fit_values, G_prime_max)
-                G_dub_prime_max = G_dub_prime_fit(alpha, g_values)
-                G_dub_prime_fit_values = np.append(G_dub_prime_fit_values, G_dub_prime_max)
-            G_concat = np.concatenate((G_prime_fit_values, G_dub_prime_fit_values), axis=0) 
-            G_log_concat_diff = (np.log(G_concat) - G_concat_inp_LN) 
-            G_concat_with_diffs = np.concatenate((G_log_concat_diff, lam*log_g_second_diffs), axis = 0)
-            return G_concat_with_diffs
-        
         dialog = MaxwellDialog(self)
         
         dialog_exec = dialog.exec_()
         
-        if dialog_exec == QDialog.Rejected:
+        if dialog_exec != QDialog.Accepted:
             return
         
-        elif dialog_exec == QDialog.Accepted:
-            try:
-                tau_H, tau_L, modes_per_decade = dialog.get_inputs()
-            except:
-                return
+        tau_H, tau_L, modes_per_decade = dialog.get_inputs()
         
         self.canvas.clear_plot1()
         self.canvas.text_plot1("Fitting Spectrum...", 'green', 20)
         QApplication.processEvents()
+                
+        result = fit_maxwell_spectrum(
+            self.w_values_Exp,
+            self.Gp_data_Exp,
+            self.Gpp_data_Exp,
+            tau_H,
+            tau_L,
+            modes_per_decade,
+            self.univ_space,
+            G_concat_fit,
+        )
         
-        w_values_Exp = self.w_values_Exp
-        self.nat_log_w_values_Exp = np.log(self.w_values_Exp)
-        self.log10_w_values_Exp = np.log10(self.w_values_Exp)
-        self.G_concat_inp_nat_Exp = np.concatenate((self.Gp_data_Exp, self.Gpp_data_Exp))
-        
-        longtau = -tau_L
-        smalltau = -tau_H
-        numoftau = 1 + (longtau-smalltau) * modes_per_decade
-        tau_values = np.logspace(longtau,smalltau,numoftau,base=10)
-        
-        
-        G_len_zeros = np.zeros(2*np.shape(self.w_values_Exp)[0] + len(tau_values) - 2)
-        
-        N = len(self.w_values_Exp)
-        
-        p_w = N / (max(np.log10(w_values_Exp))-min(np.log10(w_values_Exp)))
-        p_w_base = 95 / (14)
-        lam = 1 * (p_w/p_w_base)**0.5
-        
-        numomega = np.shape(self.w_values_Exp)[0]
-        
-        if self.univ_space == True:
-            bounds = ([-100] * numoftau, [50]*numoftau)
-        else:
-            bounds = ([-40] * numoftau, [50]*numoftau)
-        
-        G_concat_inp_LN_Exp = np.log(self.G_concat_inp_nat_Exp)
-        G_concat_inp_LN = G_concat_inp_LN_Exp
-
-        if numoftau < numomega:
-            G_split = np.array_split(G_concat_inp_LN_Exp[0:int(numomega)], numoftau)
-            G_dub_split = np.array_split(G_concat_inp_LN_Exp[int(numomega):], numoftau)
-            log_prime_means = np.array([np.mean(subarray) for subarray in G_split])
-            log_dub_means = np.array([np.mean(subarray) for subarray in G_dub_split])
-            initial_guess = (log_prime_means + log_dub_means) / 2  - 2
-        else:
-            desired_size = numoftau        
-            interpolated_indices = np.linspace(0, self.G_concat_inp_nat_Exp.shape[0] / 2 - 1, desired_size)
-            interpolated_prime = np.interp(interpolated_indices, np.arange(self.G_concat_inp_nat_Exp.shape[0]/2), G_concat_inp_LN_Exp[0:int(numomega)])
-            interpolated_dub = np.interp(interpolated_indices, np.arange(self.G_concat_inp_nat_Exp.shape[0]/2), G_concat_inp_LN_Exp[int(numomega):])
-            initial_guess = (interpolated_prime + interpolated_dub) / 2 - 2
-
-        optimiseresult, pcov = opt.curve_fit(G_concat_fit, self.w_values_Exp, G_len_zeros, p0=initial_guess, bounds=bounds, method='trf')
-        self.optimiseresult = optimiseresult    
-
-        pred_G_prime = np.array([])
-        pred_G_dub_prime = np.array([])
-
-        for alpha in w_values_Exp:
-            predicted_Gprime = G_prime_fit(alpha, np.exp(optimiseresult))
-            pred_G_prime = np.append(pred_G_prime, predicted_Gprime)
-            predicted_Gdubprime = G_dub_prime_fit(alpha, np.exp(optimiseresult))
-            pred_G_dub_prime = np.append(pred_G_dub_prime, predicted_Gdubprime)            
-        
+        self.optimiseresult = result["optimiseresult"]
+        pred_G_prime = result["pred_G_prime"]
+        pred_G_dub_prime = result["pred_G_dub_prime"]
+        mode_omega = result["mode_omega"]
+                  
         self.canvas.clear_plot1()
-        if self.univ_space == False:
-            self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth = 1, label = "G' Input", size = 20)
-            self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth = 1, label = "G'' Input", size = 20)
-        else:
-            self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth = 1, label = "G' Input Univ", size = 20)
-            self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth = 1, label = "G'' Input Univ", size = 20)
+        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gp_data_Exp, facecolors='none', edgecolors='black', linewidth = 1, label = "G' Input Univ", size = 20)
+        self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth = 1, label = "G'' Input Univ", size = 20)
         
         self.canvas.plot_line_on_axes1(self.w_values_Exp, pred_G_prime, linetype='-', color='black', label = "G' Maxwell Fit", linewidth=1)
-        self.canvas.plot_line_on_axes1(self.w_values_Exp, pred_G_dub_prime, linetype='-', color='red', label = "G'' Maxwell Fit", linewidth=1)
+        self.canvas.plot_line_on_axes1(self.w_values_Exp, pred_G_dub_prime, linetype='-', color='red', label = "G'' Maxwell Fit", linewidth=1)  
         
-        mode_omega = 1/tau_values
-        
-        self.canvas.plot_scatter_on_axes1(mode_omega, np.exp(optimiseresult), facecolors='green', edgecolors='green', linewidth=1, label='Maxwell Modes', size=20)
+        self.canvas.plot_scatter_on_axes1(mode_omega, np.exp(self.optimiseresult), facecolors='green', edgecolors='green', linewidth=1, label='Maxwell Modes', size=20)
         
         self.canvas.autoscale_plot1()
         
@@ -865,16 +664,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", f"The directory '{directory}' does not exist. Please ensure the folder containing NN models is present.")
             return
 
-        class_to_use_map = {
-            0: "Polydisperse",
-            1: "Monodisperse",
-            2: "Bidisperse"
-        }
-        class_filter = class_to_use_map.get(self.class_to_use, "")
-        files = [f for f in os.listdir(directory) if class_filter in str(f) and f.endswith(".pth")]
+        files = find_model_files(self.class_to_use, directory)
 
         if not files:
-            QMessageBox.warning(self, "Error", f"No models found for class '{class_filter}' in '{directory}'.")
+            QMessageBox.warning(self, "Error", f"No models found for class '{CLASS_LABEL[self.class_to_use]}' in '{directory}'.")
             return
         
         display_names = [os.path.splitext(f)[0] for f in files]
@@ -893,8 +686,7 @@ class MainWindow(QMainWindow):
         else:
             dialog.setStyleSheet(themes['light_window'])
         
-        
-        label_1 = QLabel(f"You have selected the class '{class_filter}'.\nIf this is incorrect, close this dialog and change the option in the dropdown.", dialog)
+        label_1 = QLabel(f"You have selected the class '{CLASS_LABEL[self.class_to_use]}'.\nIf this is incorrect, close this dialog and change the option in the dropdown.", dialog)
         layout.addWidget(label_1)
         label_2 = QLabel(f"Select a model for MWD inference:", dialog)
         layout.addWidget(label_2)
@@ -910,8 +702,6 @@ class MainWindow(QMainWindow):
             model_list.setStyleSheet(themes['dropdown_light'])
         layout.addWidget(model_list)
         
-        
-        
         label_3 = QLabel("NNs are not deterministic, so you may want to try multiple models and compare.", dialog)
         layout.addWidget(label_3)
 
@@ -921,53 +711,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
 
         if dialog.exec_() == QDialog.Accepted:
-            selected_items = model_list.selectedItems()
-            selected_display_names = [item.text() for item in selected_items]
-            self.models = []
-            loaded_model_names = []
-            reduced_names = []
-            for selected_display_name in selected_display_names:
-                selected_file = f"{selected_display_name}.pth"
-                file_path = os.path.join(directory, selected_file)
-                try:
-                    if self.class_to_use == 0:
-                        model = PolyModel()
-                    elif self.class_to_use == 1:
-                        model = MonoModel()
-                    elif self.class_to_use == 2:
-                        model = BinaryModel()
-                    else:
-                        continue
-                    model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
-                    model.eval()
-                    self.models.append(model)
-                    
-                    loaded_model_names.append(selected_file)
-                    
-                    reduced_name = selected_display_name
-                    if "_" in selected_display_name:
-                        prefix, suffix = selected_display_name.split("_", 1)
-                        if prefix in ["Polydisperse", "Bidisperse", "Monodisperse"]:
-                            i = ''.join([c for c in suffix if c.isdigit()])
-                            if prefix == "Polydisperse":
-                                prefix_short = "Poly"
-                            elif prefix == "Bidisperse":
-                                prefix_short = "Bi"
-                            elif prefix == "Monodisperse":
-                                prefix_short = "Mono"
-                            else:
-                                prefix_short = prefix
-                            if i:
-                                reduced_name = f"{prefix_short}_{i}"
-                            else:
-                                reduced_name = prefix_short
-                        else:
-                            reduced_name = selected_display_name
-                    else:
-                        reduced_name = selected_display_name
-                    reduced_names.append(reduced_name)
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", f"Failed to load model '{selected_file}': {e}")
+            selected_display_names = [item.text() for item in model_list.selectedItems()]
+            self.models, self.loaded_model_names, reduced_names, errors = load_models(
+                selected_display_names,
+                self.class_to_use,
+                directory=directory,
+                device=torch.device('cpu')
+            )
+
+            for name, error in errors:
+                QMessageBox.warning(self, "Error", f"Failed to load model '{name}': {error}")
+
             if self.models:
                 self.model_loaded = True
                 self.model_label.setText(f"Loaded models: {', '.join(reduced_names)}")
@@ -990,7 +744,6 @@ class MainWindow(QMainWindow):
         if not os.path.exists(directory):
             QMessageBox.warning(self, "Error", f"The directory '{directory}' does not exist. Please ensure the folder containing NN models is present.")
             return
-
         
         file_names = [f for f in os.listdir(directory) if "Classifier" in str(f) and f.endswith(".pth")]
         if not file_names:
@@ -1025,9 +778,7 @@ class MainWindow(QMainWindow):
         
         self.Class_display_label.setText(f'Predicted MWD Class: {self.predicted_label} {int(max(pred_class_nums))}/{len(file_names)} model(s)')
         
-        self.set_dropdown_value(predicted_class)
-        
-        
+        self.set_dropdown_value(predicted_class)      
     
     def make_prediction(self):
         self.cleaned_pred = False
@@ -1037,12 +788,13 @@ class MainWindow(QMainWindow):
         if not self.modes_fitted:
             QMessageBox.warning(self, "Error", "Please fit relaxation spectrum before attempting to make a prediction.")
             return  
+        if not self.univ_space:
+            QMessageBox.warning(self, "Error", "PLease convert data to universal space to make a prediction.")
+            return 
+
         if self.prediction_made == True:
             self.canvas.remove_single_plot("Predicted")
-        X_val = np.log10(np.exp(np.stack((self.optimiseresult, self.optimiseresult))))
-        X_val = np.concatenate((X_val, X_val), axis=1)
-        X_val = np.reshape(X_val, (2, 1, 2, -1))  
-        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+        X_val_tensor = build_prediction_tensor(self.optimiseresult)
         loaded_model_names = getattr(self, 'loaded_model_names', None)
         if loaded_model_names is None:
             label_text = self.model_label.text().replace('Loaded models: ', '')
@@ -1070,19 +822,10 @@ class MainWindow(QMainWindow):
                 prediction_np = prediction.numpy()
                 prediction_np[prediction_np < 0.0005] = 0
                 short_label = model_file.replace('Polydisperse', 'Poly').replace('Monodisperse', 'Mono').replace('Bidisperse', 'Bi').replace('.pth', '')
-                if self.class_to_use == 0:
-                    if not self.univ_space:
-                        QMessageBox.warning(self, "Error", "PLease convert data to universal space to make a prediction.")
-                        return 
-                    pred_MWD = sum_of_lognormals_Z(self.z, prediction_np[0])
-                    pred_MWD = pred_MWD / np.trapz(pred_MWD, x = np.log(self.z))
-                    self.canvas.plot_line_on_axes2(m, pred_MWD, linetype='--', color=color, label=f"Predicted {short_label}", linewidth=3, alpha = pred_alpha)
-                    Mn = 1/np.trapz(pred_MWD*np.exp(-x), x=x)
-                    Mw = np.trapz(pred_MWD*np.exp(x), x=x)
-                    PDI = Mw/Mn
-                    def format_e(n):
-                        a = '%E' % n
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
+                pred_MWD, stats = make_prediction_curve(prediction_np=prediction_np, class_to_use=self.class_to_use, M_e=self.M_e, z=self.z, x=x)
+                self.canvas.plot_line_on_axes2(m, pred_MWD, linetype='--', color=color, label=f"Predicted {short_label}", linewidth=3, alpha = pred_alpha)
+                if self.class_to_use == 0 or self.class_to_use == 1:
+                    Mn, Mw, PDI = stats[0], stats[1], stats[2]
                     self.model_stats_dict[short_label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
                     mn_list.append(Mn)
                     mw_list.append(Mw)
@@ -1092,70 +835,17 @@ class MainWindow(QMainWindow):
                         "curve": pred_MWD.copy()
                     }
                     if idx == 0:
-                        # self.pred_MWD = pred_MWD
-                        # self.Est_Mn = Mn
-                        # self.Est_Mw = Mw
-                        # self.Est_PDI = PDI
-                        self.tails_correct_button.setVisible(True)
-                        # self.prediction = prediction_np.copy()
-                elif self.class_to_use == 1:
-                    if not self.univ_space:
-                        QMessageBox.warning(self, "Error", "PLease convert data to universal space to make a monodisperse prediction.")
-                        return 
-                    PDI = 1.03
-                    sigma_mono = np.sqrt(np.log(PDI))
-                    Z_pred = 10**float(prediction_np[0])
-                    mean_Z_pred = np.log(Z_pred)-(sigma_mono**2)/2
-                    pred_MWD = lognormal(self.z, mean_Z_pred, sigma_mono)
-                    pred_MWD = pred_MWD / simps(pred_MWD, x = np.log(self.z))
-                    self.canvas.plot_line_on_axes2(m, pred_MWD, linetype='--', color=color, label=f"Predicted {short_label}", linewidth=3, alpha = pred_alpha)
-                    Mw = Z_pred * self.M_e
-                    Mn = Mw / PDI
-                    def format_e(n):
-                        a = '{:.3E}'.format(n)
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-                    self.model_stats_dict[short_label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
-                    mn_list.append(Mn)
-                    mw_list.append(Mw)
-                    pdi_list.append(PDI)
-                    self.predictions_dict[short_label] = {
-                        "raw": prediction_np[0].copy(),
-                        "curve": pred_MWD.copy()
-                    }
-                    if idx == 0:
-                        self.pred_MWD = pred_MWD
-                        self.Est_Mw = Mw
-                        self.Est_Mn = Mn
-                        self.Est_PDI = PDI
-                        self.PDI_change_button.setVisible(True)
-                        self.prediction = prediction_np.copy()
+                        if self.class_to_use == 0:
+                            self.tails_correct_button.setVisible(True)
+                        else:
+                            self.PDI_change_button.setVisible(True)
                 elif self.class_to_use == 2:
-                    
-                    if not self.univ_space:
-                        QMessageBox.warning(self, "Error", "Please convert data to universal space to make a binary prediction.")
-                        return
-                    PDI = 1.03
-                    sigma_bin = np.sqrt(np.log(PDI))
-                    ZS_pred = 10**float(prediction_np[0][0])
-                    ZL_pred = 10**float(prediction_np[0][1])
-                    phiL_pred = float(prediction_np[0][2])
-                    phiS_pred = 1 - phiL_pred 
-                    mean_ZS_pred = np.log(ZS_pred)-(sigma_bin**2)/2
-                    mean_ZL_pred = np.log(ZL_pred)-(sigma_bin**2)/2
-                    pred_MWD = phiL_pred * lognormal(self.z, mean_ZL_pred, sigma_bin) + phiS_pred * lognormal(self.z, mean_ZS_pred, sigma_bin)
-                    pred_MWD = pred_MWD / np.trapz(pred_MWD, x = np.log(self.z))
-                    self.canvas.plot_line_on_axes2(m, pred_MWD, linetype='--', color=color, label=f"Predicted {short_label}", linewidth=3, alpha = pred_alpha)
-                    MwS = ZS_pred * self.M_e
-                    MnS = MwS / PDI
-                    MwL = ZL_pred * self.M_e
-                    MnL = MwL / PDI
+                    ZS_pred, ZL_pred, phiL_pred, phiS_pred, PDI = stats[0], stats[1], stats[2], stats[3], stats[4]
+                    MwS, MwL = ZS_pred * self.M_e, ZL_pred * self.M_e
                     MwS_list.append(MwS)
                     MwL_list.append(MwL)
                     phiL_list.append(phiL_pred)
                     phiS_list.append(phiS_pred)
-                    def format_e(n):
-                        a = '{:.3E}'.format(n)
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
                     self.model_stats_dict[short_label] = [
                         f"Component 1 (Mw): {phiS_pred*100:.2f}% {format_e(Decimal(MwS))} (g/mol)",
                         f"Component 2 (Mw): {phiL_pred*100:.2f}% {format_e(Decimal(MwL))} (g/mol)",
@@ -1167,24 +857,11 @@ class MainWindow(QMainWindow):
                         "curve": pred_MWD.copy()
                     }
                     if idx == 0:
-                        # self.pred_MWD = pred_MWD
-                        # self.Est_MwS = MwS
-                        # self.Est_MnS = MnS
-                        # self.Est_MwL = MwL
-                        # self.Est_MnL = MnL
-                        # self.Est_phiL = phiL_pred
-                        # self.Est_phiS = phiS_pred
-                        # self.Est_PDIL = PDI
-                        # self.Est_PDIS = PDI
                         self.PDI_change_button.setVisible(True)
-                        # self.prediction = prediction_np.copy()
                 any_success = True
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"There was an error with model {model_file}: {e}")
         if len(mn_list) > 1:
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
             if self.class_to_use == 0 or self.class_to_use ==1:
                 mean_Mn = format_e(Decimal(np.mean(mn_list)))
                 mean_Mw = format_e(Decimal(np.mean(mw_list)))
@@ -1207,7 +884,6 @@ class MainWindow(QMainWindow):
             self.canvas.autoscale_plot2()
             if hasattr(self, 'predicted_stats_window') and self.predicted_stats_window is not None:
                 self.predicted_stats_window.close()
-        
             
     def load_GPC(self):
         dialog = QDialog(self)
@@ -1244,7 +920,6 @@ class MainWindow(QMainWindow):
 
         dialog.setLayout(layout)
         dialog.exec_()
-        
     
     def load_GPC_file(self):
         options = QFileDialog.Options()
@@ -1254,40 +929,16 @@ class MainWindow(QMainWindow):
             self.canvas.clear_plot2()
 
             self.GPC_loaded = False
-        
             
             file_name = os.path.basename(file_path)
             try:
                 if self.class_to_use == 0:
                     self.GPC_label.setText(f"Loaded GPC: {file_name}")
-                    datafile = np.loadtxt(file_path, delimiter='\t', skiprows=1)
-                    data = datafile[datafile[:, 0].argsort()]
-                    if data[0,0] < 5:
-                        try:
-                            m_data = 10**data[:, 0]
-                        except:
-                            self.clear_MWD_plot()
-                            self.canvas.autoscale_plot2()
-                            QMessageBox.warning(self, "Error", "Please ensure you have selected the correct MWD class for the GPC data you are loading, \n and that the file is of the correct format.")
-                            return
-                    else:
-                        m_data = data[:,0]
-                    x_data = np.log(m_data)
-                    y_data = data[:, 1]
-                    y_data = y_data / np.trapz(y_data, x=x_data)
-                    
-                    self.m_data = m_data
-                    self.y_data_GPC = y_data
-                    
-                    self.canvas.plot_line_on_axes2(m_data, y_data, color='blue', linetype='-', label="GPC Data", linewidth=3)
+                    m_data, self.y_data_GPC, stats = parse_mwd_file(file_path, self.class_to_use, m)
+                    self.GPC_Mn, self.GPC_Mw, self.GPC_PDI = stats
+
+                    self.canvas.plot_line_on_axes2(m_data, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
                                         
-                    self.GPC_Mn = 1/np.trapz(y_data*np.exp(-x_data), x=x_data)
-                    self.GPC_Mw = np.trapz(y_data*np.exp(x_data), x=x_data)
-                    self.GPC_PDI = self.GPC_Mw/self.GPC_Mn
-        
-                    def format_e(n):
-                        a = '%E' % n
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
                     self.GPC_Mn_label.setText(f'GPC Mn: {format_e(Decimal(self.GPC_Mn))} (g/mol)')
                     self.GPC_Mw_label.setText(f'GPC Mw: {format_e(Decimal(self.GPC_Mw))} (g/mol)')
                     self.GPC_PDI_label.setText(f'GPC PDI: {self.GPC_PDI:.2f}')
@@ -1296,24 +947,11 @@ class MainWindow(QMainWindow):
                     
                 elif self.class_to_use == 1:
                     self.GPC_label.setText(f"Loaded GPC: {file_name}")
-                    data = np.loadtxt(file_path, delimiter='\t')
-                    Mw_data = data[0]
-                    PDI_data = data[1]
-                    sigma_data = np.sqrt(np.log(PDI_data))
-                    mean_data = np.log(Mw_data)-(sigma_data**2)/2
-                    y_data = lognormal(m, mean_data, sigma_data)
-                    y_data = y_data / np.trapz(y_data, x = np.log(m))
+                    self.y_data_GPC, stats = parse_mwd_file(file_path, self.class_to_use, m)
+                    self.GPC_Mn, self.GPC_Mw, self.GPC_PDI = stats
+
+                    self.canvas.plot_line_on_axes2(m, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
                     
-                    self.y_data_GPC = y_data
-                    
-                    self.canvas.plot_line_on_axes2(m, y_data, color='blue', linetype='-', label="GPC Data", linewidth=3)
-                    
-                    self.GPC_Mw = Mw_data
-                    self.GPC_Mn = Mw_data / PDI_data
-                    self.GPC_PDI = PDI_data
-                    def format_e(n):
-                        a = '{:.3E}'.format(n)
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
                     self.GPC_Mn_label.setText(f'GPC Mn: {format_e(Decimal(self.GPC_Mn))} (g/mol)')
                     self.GPC_Mw_label.setText(f'GPC Mw: {format_e(Decimal(self.GPC_Mw))} (g/mol)')
                     self.GPC_PDI_label.setText(f'Assumed PDI: {self.GPC_PDI:.2f}')
@@ -1322,40 +960,11 @@ class MainWindow(QMainWindow):
                     
                 elif self.class_to_use == 2:
                     self.GPC_label.setText(f"Loaded GPC: {file_name}")
-                    data = np.loadtxt(file_path, delimiter='\t')
+                    self.y_data_GPC, stats = parse_mwd_file(file_path, self.class_to_use, m)
+                    phiS_data, phiL_data, self.GPC_MwS, self.GPC_MwL, self.GPC_PDIS, self.GPC_PDIL = stats                    
                     
-                    phi_values_data = data[:,0]
-                    Mw_values_data = data[:,1]
-                    PDI_values_data = data[:,2]
-    
-                    phiL_data,phiS_data = phi_values_data[0],phi_values_data [1]
-                    MwL_data,MwS_data = Mw_values_data[0],Mw_values_data[1]
-                    PDIL_data,PDIS_data = PDI_values_data[0],PDI_values_data[1]
-                    
-                    sigmaL_data = np.sqrt(np.log(PDIL_data))
-                    sigmaS_data = np.sqrt(np.log(PDIS_data))
-    
-                    mean_L_data = np.log(MwL_data)-(sigmaL_data**2)/2
-                    mean_S_data = np.log(MwS_data)-(sigmaS_data**2)/2
-    
-                    y_data = phiL_data * lognormal(m, mean_L_data, sigmaL_data) + phiS_data * lognormal(m, mean_S_data, sigmaS_data)
-                    y_data = y_data / np.trapz(y_data, x = np.log(m))
-                    
-                    self.y_data_GPC = y_data
-                    
-                    self.canvas.plot_line_on_axes2(m, y_data, color='blue', linetype='-', label="GPC Data", linewidth=3)
-                    
-                    self.GPC_MwS = MwS_data
-                    self.GPC_MwL = MwL_data
-                    
-                    self.GPC_PDIS = PDIS_data
-                    self.GPC_PDIL = PDIL_data
-                    
-                    
-                    def format_e(n):
-                        a = '{:.3E}'.format(n)
-                        return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-                    
+                    self.canvas.plot_line_on_axes2(m, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
+                                        
                     self.GPC_Mn_label.setText(f'GPC Component 1 (Mw): {phiS_data*100:.2f}% {format_e(Decimal(self.GPC_MwS))} (g/mol)')
                     self.GPC_Mw_label.setText(f'GPC Component 2 (Mw): {phiL_data*100:.2f}% {format_e(Decimal(self.GPC_MwL))} (g/mol)')
                     self.GPC_PDI_label.setText(f'PDI 1: {self.GPC_PDIS:.2f}, PDI 2: {self.GPC_PDIL:.2f}')
@@ -1380,14 +989,12 @@ class MainWindow(QMainWindow):
                 self.canvas.autoscale_plot2()
                 self.GPC_loaded = True            
                 QApplication.processEvents()
-  
                 
             except:
                 self.clear_MWD_plot()
                 self.canvas.autoscale_plot2()
                 QMessageBox.warning(self, "Error", "Please ensure you have selected the correct MWD class for the GPC data you are loading.")
                 return
-            
         
     def load_GPC_func(self):
         dialog = QDialog(self)
@@ -1399,38 +1006,43 @@ class MainWindow(QMainWindow):
         lognormal_button = QPushButton("Log-Normal", dialog)   
         lognormal_button.setStyleSheet(themes['Func_buttons_dark'] if self.app.is_dark else themes['Func_buttons_light'])
         lognormal_button.setFixedSize(200, 40)
-        lognormal_button.clicked.connect(lambda: (dialog.accept(), self.generate_GPC_lognormal()))
+        lognormal_button.clicked.connect(lambda: (dialog.accept(), self.generate_GPC_func("LN")))
         layout.addWidget(lognormal_button)
         
         flory_button = QPushButton("Flory", dialog)
         flory_button.setStyleSheet(themes['Func_buttons_dark'] if self.app.is_dark else themes['Func_buttons_light'])
         flory_button.setFixedSize(200, 40)
-        flory_button.clicked.connect(lambda: (dialog.accept(), self.generate_GPC_flory()))
+        flory_button.clicked.connect(lambda: (dialog.accept(), self.generate_GPC_func("F")))
         layout.addWidget(flory_button)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel, dialog)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
         dialog.setLayout(layout)
         dialog.exec_()
-    
-    def generate_GPC_lognormal(self):
+            
+    def generate_GPC_func(self, dist_type):
         dialog = QDialog(self)
-        dialog.setWindowTitle("Log-Normal GPC Parameters")
         layout = QFormLayout(dialog)
-        message_label = QLabel("Enter the parameters for the Log-Normal GPC curve:", dialog)
+        if dist_type == "LN":
+            dialog.setWindowTitle("Log-Normal GPC Parameters")
+            message_label = QLabel("Enter the parameters for the Log-Normal GPC curve:", dialog)
+        elif dist_type == "F":
+            dialog.setWindowTitle("Flory GPC Parameters")
+            message_label = QLabel("Enter the parameter for the Flory GPC curve:", dialog)
         layout.addWidget(message_label)
-        
         Mw_label = QLabel("Enter the Mw (g/mol):", dialog)
         self.Mw_input = QLineEdit(dialog)
         self.Mw_input.setPlaceholderText("e.g. 100000")
         
-        PDI_label = QLabel("Enter the PDI:", dialog)
-        self.PDI_input = QLineEdit(dialog)
-        self.PDI_input.setPlaceholderText("e.g. 1.8")
+        if dist_type == "LN":
+            PDI_label = QLabel("Enter the PDI:", dialog)
+            self.PDI_input = QLineEdit(dialog)
+            self.PDI_input.setPlaceholderText("e.g. 1.8")
         
-        layout.addRow(Mw_label, self.Mw_input)
-        layout.addRow(PDI_label, self.PDI_input)
-        
+        layout.addRow(Mw_label, self.Mw_input)        
+        if dist_type == "LN":
+            layout.addRow(PDI_label, self.PDI_input)
+
         dialog.setLayout(layout)
         dialog.setStyleSheet(themes['dark_window'] if self.app.is_dark else themes['light_window'])
         
@@ -1438,111 +1050,43 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)       
         layout.addWidget(buttons)
-        
+
         if dialog.exec_() == QDialog.Accepted:
             Mw = self.Mw_input.text()
-            PDI = self.PDI_input.text()
-            if not Mw or not PDI:
-                QMessageBox.warning(self, "Error", "Please enter both Mw and PDI values.")
-                return
-            try:
-                Mw = float(Mw)
-                PDI = float(PDI)
-                sigma = np.sqrt(np.log(PDI))
-                mean = np.log(Mw) - (sigma**2) / 2
-            except ValueError:
-                QMessageBox.warning(self, "Error", "Please enter valid numerical values for Mw and PDI.")
-                return
-            y_data = lognormal(m, mean, sigma)
-            y_data = y_data / np.trapz(y_data, x=np.log(m))
-            self.y_data_GPC = y_data
+
+            if dist_type == "LN":
+                PDI = self.PDI_input.text()
+                if not Mw or not PDI:
+                    QMessageBox.warning(self, "Error", "Please enter both Mw and PDI values.")
+                    return
+                try:
+                    Mw = float(Mw)
+                    PDI = float(PDI)
+                except ValueError:
+                    QMessageBox.warning(self, "Error", "Please enter valid numerical values for Mw and PDI.")
+                    return
+                self.y_data_GPC = build_lognormal_gpc(Mw, PDI, m)
+            elif dist_type == "F":
+                if not Mw:
+                    QMessageBox.warning(self, "Error", "Please enter the Mw value.")
+                    return
+                try:
+                    Mw = float(Mw)
+                    PDI = 2.0
+                except ValueError:
+                    QMessageBox.warning(self, "Error", "Please enter a valid numerical value for Mw.")
+                    return
+                self.y_data_GPC = build_flory_gpc(Mw, m)
             
             prediction_made = self.prediction_made
             self.canvas.clear_plot2()
-
                 
-            self.canvas.plot_line_on_axes2(m, y_data, color='blue', linetype='-', label="GPC Data", linewidth=3)
+            self.canvas.plot_line_on_axes2(m, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
                                         
-            
+            self.GPC_Mn = Mw / PDI
             self.GPC_Mw = Mw
             self.GPC_PDI = PDI
-            self.GPC_Mn = Mw / PDI
 
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            self.GPC_Mn_label.setText(f'GPC Mn: {format_e(Decimal(self.GPC_Mn))} (g/mol)')
-            self.GPC_Mw_label.setText(f'GPC Mw: {format_e(Decimal(self.GPC_Mw))} (g/mol)')
-            self.GPC_PDI_label.setText(f'GPC PDI: {self.GPC_PDI:.2f}')
-                                    
-            if prediction_made:
-                    if not self.cleaned_pred:
-                        for idx, (label, prediction) in enumerate(self.predictions_dict.items()):
-                            color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
-                            self.canvas.plot_line_on_axes2(m, prediction["curve"], linetype='--', color=color, label=f"Predicted {label}", linewidth=3, alpha = pred_alpha)
-                    else:
-                        for idx, (label, curve) in enumerate(self.cleaned_predictions_dict.items()):
-                            color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
-                            self.canvas.plot_line_on_axes2(m, curve, linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
-                            self.cleaned_pred = True
-                            self.undo_tails_correct_button.setVisible(True)
-                    self.prediction_made = True
-                    self.tails_correct_button.setVisible(True)
-                    if self.class_to_use == 1 or self.class_to_use == 2:
-                        self.PDI_change_button.setVisible(True) 
-            self.canvas.autoscale_plot2()
-            self.GPC_loaded = True            
-            QApplication.processEvents()
-            
-    def generate_GPC_flory(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Flory GPC Parameters")
-        layout = QFormLayout(dialog)
-        message_label = QLabel("Enter the parameters for the Flory GPC curve:", dialog)
-        layout.addWidget(message_label)
-        
-        Mw_label = QLabel("Enter the Mw (g/mol):", dialog)
-        self.Mw_input = QLineEdit(dialog)
-        self.Mw_input.setPlaceholderText("e.g. 100000")
-                
-        layout.addRow(Mw_label, self.Mw_input)
-        
-        dialog.setLayout(layout)
-        dialog.setStyleSheet(themes['dark_window'] if self.app.is_dark else themes['light_window'])
-        
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)       
-        layout.addWidget(buttons)
-
-        
-        if dialog.exec_() == QDialog.Accepted:
-            Mw = self.Mw_input.text()
-            if not Mw:
-                QMessageBox.warning(self, "Error", "Please enter the Mw value.")
-                return
-            try:
-                Mw = float(Mw)
-                Mn = Mw / 2
-            except ValueError:
-                QMessageBox.warning(self, "Error", "Please enter valid numerical value for Mw.")
-                return
-            y_data = flory_schulz(m, Mn)
-            y_data = y_data / np.trapz(y_data, x=np.log(m))
-            self.y_data_GPC = y_data
-            
-            prediction_made = self.prediction_made
-            self.canvas.clear_plot2()
-                
-            self.canvas.plot_line_on_axes2(m, y_data, color='blue', linetype='-', label="GPC Data", linewidth=3)
-                                        
-            self.GPC_Mn = Mn
-            self.GPC_Mw = Mw
-            self.GPC_PDI = 2
-
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
             self.GPC_Mn_label.setText(f'GPC Mn: {format_e(Decimal(self.GPC_Mn))} (g/mol)')
             self.GPC_Mw_label.setText(f'GPC Mw: {format_e(Decimal(self.GPC_Mw))} (g/mol)')
             self.GPC_PDI_label.setText(f'GPC PDI: {self.GPC_PDI:.2f}')
@@ -1565,7 +1109,7 @@ class MainWindow(QMainWindow):
             self.canvas.autoscale_plot2()
             self.GPC_loaded = True            
             QApplication.processEvents()
-            
+
     def clear_rheo_plot(self):
         self.rheo_label.setText("No rheology data loaded")
         self.Class_display_label.setText("Predicted MWD Class: N/A")
@@ -1575,16 +1119,8 @@ class MainWindow(QMainWindow):
         self.canvas.clear_plot1()
         self.canvas.change_axes_plot1(r'$\omega$ (rad/s)', r"G', G'' (Pa)")
         QApplication.processEvents()
-        
             
     def clear_MWD_plot(self):
-        # self.GPC_Mn_label.setText('GPC Mn: N/A')
-        # self.GPC_Mw_label.setText('GPC Mw: N/A')
-        # self.GPC_PDI_label.setText('GPC PDI: N/A')
-        
-        # self.Est_Mn_label.setText('Estimated Mn: N/A')
-        # self.Est_Mw_label.setText('Estimated Mw: N/A')
-        # self.Est_PDI_label.setText('Estimated PDI: N/A')  
         self.model_stats_dict = {"N/A": [self.Est_Mn_label.text(), self.Est_Mw_label.text(), self.Est_PDI_label.text()]}
         self.predicted_stats_window.update()
         self.gpc_stats_window.update()
@@ -1604,6 +1140,7 @@ class MainWindow(QMainWindow):
         if not self.prediction_made:
             QMessageBox.warning(self, "Error", "Please make a MWD prediction before attempting to save.")
             return 
+        use_cleaned = False
         if self.cleaned_pred:
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("Select Prediction Type")
@@ -1611,113 +1148,52 @@ class MainWindow(QMainWindow):
             cleaned_button = msg_box.addButton("Cleaned Prediction", QMessageBox.YesRole)
             original_button = msg_box.addButton("Original Prediction", QMessageBox.NoRole)
             msg_box.exec_()
-                
             
-            
-            predictions_dict = getattr(self, 'predictions_dict', None)
-            if msg_box.clickedButton() == cleaned_button:
-                    cleaned_dict = getattr(self, 'cleaned_predictions_dict', None)
-                    if cleaned_dict and len(cleaned_dict) > 1:
-                        dialog = QDialog(self)
-                        dialog.setWindowTitle("Select Cleaned Prediction to Save")
-                        layout = QVBoxLayout(dialog)
-                        label = QLabel("Select which model's cleaned prediction to save:", dialog)
-                        layout.addWidget(label)
-                        combo = QComboBox(dialog)
-                        combo.addItems(list(cleaned_dict.keys()))
-                        layout.addWidget(combo)
-                        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
-                        buttons.accepted.connect(dialog.accept)
-                        buttons.rejected.connect(dialog.reject)
-                        layout.addWidget(buttons)
-                        dialog.setLayout(layout)
-                        if dialog.exec_() == QDialog.Accepted:
-                            selected_label = combo.currentText()
-                        else:
-                            return
-                    else:
-                        selected_label = list(cleaned_dict.keys())[0] if cleaned_dict else None
-                    y_tosave = self.cleaned_predictions_dict[selected_label]
-            elif msg_box.clickedButton() == original_button:
-                if predictions_dict and len(predictions_dict) > 1:
-                    dialog = QDialog(self)
-                    dialog.setWindowTitle("Select Prediction to Save")
-                    layout = QVBoxLayout(dialog)
-                    label = QLabel("Select which model's prediction to save:", dialog)
-                    layout.addWidget(label)
-                    combo = QComboBox(dialog)
-                    combo.addItems(list(predictions_dict.keys()))
-                    layout.addWidget(combo)
-                    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
-                    buttons.accepted.connect(dialog.accept)
-                    buttons.rejected.connect(dialog.reject)
-                    layout.addWidget(buttons)
-                    dialog.setLayout(layout)
-                    if dialog.exec_() == QDialog.Accepted:
-                        selected_label = combo.currentText()
-                    else:
-                        return
-                else:
-                    selected_label = list(self.predictions_dict.keys())[0] if self.predictions_dict else None
-                y_tosave = self.predictions_dict[selected_label]["curve"]
+            use_cleaned = (msg_box.clickedButton() == cleaned_button)
+
+        source_dict = self.cleaned_predictions_dict if use_cleaned else self.predictions_dict
+        source_name = "cleaned prediction" if use_cleaned else "prediction"
+
+        if len(source_dict) > 1:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Select Prediction to Save")
+            layout = QVBoxLayout(dialog)
+            label = QLabel(f"Select which {source_name} to save:", dialog)
+            layout.addWidget(label)
+
+            combo = QComboBox(dialog)
+            combo.addItems(list(source_dict.keys()))
+            layout.addWidget(combo)
+
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addWidget(buttons)
+            dialog.setLayout(layout)
+            if dialog.exec_() != QDialog.Accepted:
+                return
+
+            selected_label = combo.currentText()
         else:
-            predictions_dict = getattr(self, 'predictions_dict', None)
-            if predictions_dict and len(predictions_dict) > 1:
-                dialog = QDialog(self)
-                dialog.setWindowTitle("Select Prediction to Save")
-                layout = QVBoxLayout(dialog)
-                label = QLabel("Select which model's prediction to save:", dialog)
-                layout.addWidget(label)
-                combo = QComboBox(dialog)
-                combo.addItems(list(predictions_dict.keys()))
-                layout.addWidget(combo)
-                buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
-                buttons.accepted.connect(dialog.accept)
-                buttons.rejected.connect(dialog.reject)
-                layout.addWidget(buttons)
-                dialog.setLayout(layout)
-                if dialog.exec_() == QDialog.Accepted:
-                    selected_label = combo.currentText()
-                else:
-                    return
-            else:
-                selected_label = list(self.predictions_dict.keys())[0] if self.predictions_dict else None
-            y_tosave = self.predictions_dict[selected_label]["curve"]
+            selected_label = next(iter(source_dict))
+        
+        y_tosave = source_dict[selected_label]["curve"].copy()
         y_tosave = np.where(y_tosave < 1e-10, 0, y_tosave)
+        
+        stats_source = self.model_stats_dict
+        if self.cleaned_pred and not use_cleaned and hasattr(self, "original_model_stats_dict"):
+            stats_source = self.original_model_stats_dict
+        
+        stats_to_save = stats_source.get(selected_label, None)
+        
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Prediction", "", "Text Files (*.txt);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Prediction", "data", "Text Files (*.txt);;All Files (*)", options=options)
         if file_path:
             try:
                 try:
-                    if self.class_to_use == 0 or self.class_to_use == 1:
-                        if self.cleaned_pred:
-                            if msg_box.clickedButton() == cleaned_button:
-                                with open(file_path, 'w') as file:
-                                    file.write(f"Mn = {self.model_stats_dict[selected_label][0]}, ")
-                                    file.write(f"Mw = {self.model_stats_dict[selected_label][1]}, ")
-                                    file.write(f"PDI = {self.model_stats_dict[selected_label][2]},\n")
-                                    np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
-                            else:
-                                with open(file_path, 'w') as file:
-                                    file.write(f"Mn = {self.original_model_stats_dict[selected_label][0]}, ")
-                                    file.write(f"Mw = {self.original_model_stats_dict[selected_label][1]}, ")
-                                    file.write(f"PDI = {self.original_model_stats_dict[selected_label][2]},\n")
-                                    np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
-                        else:
-                            with open(file_path, 'w') as file:
-                                file.write(f"Mn = {self.model_stats_dict[selected_label][0]}, ")
-                                file.write(f"Mw = {self.model_stats_dict[selected_label][1]}, ")
-                                file.write(f"PDI = {self.model_stats_dict[selected_label][2]},\n")
-                                np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
-                    elif self.class_to_use == 2:
-                        with open(file_path, 'w') as file:
-                            file.write(f"{self.model_stats_dict[selected_label][0]}\n")
-                            file.write(f"{self.model_stats_dict[selected_label][1]}\n")
-                            file.write(f"{self.model_stats_dict[selected_label][2]}\n")
-                            np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
+                    write_prediction_file(file_path, m, y_tosave, self.class_to_use, stats_to_save)
                 except:
-                    with open(file_path, 'w') as file:
-                        np.savetxt(file, np.column_stack((m, y_tosave)), delimiter='\t', fmt='%.6e')
+                    write_prediction_file(file_path, m, y_tosave, self.class_to_use, None)
             except Exception:
                 QMessageBox.warning(self, "Error", "Error encountered while saving file.")
 
@@ -1809,109 +1285,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(threshold_input)
         layout.addWidget(buttons)
         dialog.setLayout(layout)
-        if dialog.exec_() == QDialog.Accepted:
-            if self.cleaned_pred:
-                if hasattr(self, 'cleaned_predictions_dict'):
-                    for label in self.cleaned_predictions_dict.keys():  
-                        self.canvas.remove_single_plot(f"Predicted {label} (cleaned)")
-            min_x, max_x = None, None
-            if method_dropdown.currentText() == "Min/Max M Range":
-                try:
-                    min_x = float(min_x_input.text())
-                except:
-                    min_x = None
-                try:
-                    max_x = float(max_x_input.text())
-                except:
-                    max_x = None
-                if min_x is None and max_x is None:
-                    QMessageBox.warning(None, "Invalid Input", "Please enter valid min/max M values.")
-                    return
-            elif method_dropdown.currentText() == "Min/Max M Range with low tail redistribution":
-                try:
-                    min_x = float(min_x_input.text())
-                except:
-                    min_x = None
-                try:
-                    max_x = float(max_x_input.text())
-                except:
-                    max_x = None
-                if min_x is None:
-                    QMessageBox.warning(None, "Invalid Input", "Please enter valid min/max M values.")
-                    return
-                if min_x is None and max_x is None:
-                    QMessageBox.warning(None, "Invalid Input", "Please enter valid min/max M values.")
-                    return
-                try:
-                    dump_below = float(dump_below_input.text())
-                except:
-                    QMessageBox.warning(None, "Invalid Input", "Please enter a valid value to redistribute below.")
-                    return
-                if dump_below <= min_x:
-                    QMessageBox.warning(None, "Invalid Input", "Redistribution value must be greater than the min M value.")
-                    return
-            threshold = float(threshold_input.text()) if method_dropdown.currentText() == "Threshold" else 0
-        else:
+        if dialog.exec_() != QDialog.Accepted:
             return
-        self.original_predictions_dict = {label: pred['curve'].copy() for label, pred in self.predictions_dict.items()}
-        self.cleaned_predictions_dict = {}
-        for idx, (label, pred) in enumerate(self.predictions_dict.items()):
-            color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
-            prediction_to_clean = pred["raw"].copy()
-            sum_cleaned = 0
-            if min_x is not None:
-                for n in range(len(prediction_to_clean)):
-                    if np.exp(means_Z[n]+ sigma_poly**2/2)*self.M_e < min_x:
-                        sum_cleaned += prediction_to_clean[n]
-                        prediction_to_clean[n] = 0
-            if max_x is not None:
-                for n in range(len(prediction_to_clean)):
-                    if np.exp(means_Z[n]+ sigma_poly**2/2)*self.M_e > max_x:
-                        prediction_to_clean[n] = 0
-            if method_dropdown.currentText() == "Min/Max M Range with low tail redistribution":
-                dump_split = 0
-                values_where_dump = np.zeros(len(prediction_to_clean))
-                for n in range(len(prediction_to_clean)):
-                    if np.exp(means_Z[n]+ sigma_poly**2/2)*self.M_e > min_x:
-                        if np.exp(means_Z[n]+ sigma_poly**2/2)*self.M_e < dump_below:
-                            dump_split += 1
-                            values_where_dump[n] = prediction_to_clean[n]
-                fractions_to_dump = values_where_dump / sum(values_where_dump) if sum(values_where_dump) > 0 else values_where_dump
-                to_dump = fractions_to_dump * sum_cleaned
-                prediction_to_clean += to_dump
-            if threshold < max(pred['curve']) and threshold != 0:
-                prediction_to_clean[1.5*prediction_to_clean < threshold] = 0
-            cleaned_curve = sum_of_lognormals_Z(self.z, prediction_to_clean)
-            cleaned_curve = cleaned_curve / np.trapz(cleaned_curve, x = np.log(self.z))
-            self.cleaned_predictions_dict[label] = cleaned_curve.copy()
-            self.canvas.remove_single_plot(f"Predicted {label}")
-            self.canvas.plot_line_on_axes2(m, cleaned_curve, linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
-        self.canvas.autoscale_plot2()
+        
+        method = method_dropdown.currentText()
+        params = {
+            "min_x": float(min_x_input.text()) if min_x_input.text() else None,
+            "max_x": float(max_x_input.text()) if max_x_input.text() else None,
+            "dump_below": float(dump_below_input.text()) if dump_below_input.text() else None,
+            "threshold": float(threshold_input.text()) if threshold_input.text() else 0.0,
+        }
+            
+        if self.cleaned_pred:
+            if hasattr(self, 'cleaned_predictions_dict'):
+                for label in self.cleaned_predictions_dict.keys():  
+                    self.canvas.remove_single_plot(f"Predicted {label} (cleaned)")
+        
+        self.original_predictions_dict = {
+            label: pred["curve"].copy()
+            for label, pred in self.predictions_dict.items()
+        }
+        
         self.original_model_stats_dict = self.model_stats_dict.copy()
-        self.model_stats_dict = {}
-        mn_list, mw_list, pdi_list = [], [], []
-
-        for label, cleaned_curve in self.cleaned_predictions_dict.items():
-            Mn = 1 / np.trapz(cleaned_curve * np.exp(-x), x=x)
-            Mw = np.trapz(cleaned_curve * np.exp(x), x=x)
-            PDI = Mw / Mn
-            mn_list.append(Mn)
-            mw_list.append(Mw)
-            pdi_list.append(PDI)
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            self.model_stats_dict[label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
-        #self.predicted_stats_window = StatsWindow("Predicted MWD Stats", self.model_stats_dict, parent=self)
-        if len(mn_list) > 1:
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            if self.class_to_use == 0:
-                mean_Mn = format_e(Decimal(np.mean(mn_list)))
-                mean_Mw = format_e(Decimal(np.mean(mw_list)))
-                mean_PDI = f"{np.mean(pdi_list):.2f}"
-                self.model_stats_dict["Mean"] = [f"{mean_Mn} (g/mol)", f"{mean_Mw} (g/mol)", mean_PDI]
+        self.cleaned_predictions_dict, self.model_stats_dict = clean_predictions(self.predictions_dict,method,params,z=self.z,m=m,M_e=self.M_e,means_Z=means_Z,sigma_poly=sigma_poly,)
+        
+        for idx, (label, pred) in enumerate(self.cleaned_predictions_dict.items()):
+            color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
+            self.canvas.remove_single_plot(f"Predicted {label}")
+            self.canvas.plot_line_on_axes2(
+                        m,
+                        pred["curve"],
+                        linetype="--",
+                        color=color,
+                        label=f"Predicted {label} (cleaned)",
+                        linewidth=3,
+                        alpha=pred_alpha,
+                    )        
+        self.canvas.autoscale_plot2()
 
         self.cleaned_pred = True
         self.undo_tails_correct_button.setVisible(True)
@@ -1931,31 +1341,7 @@ class MainWindow(QMainWindow):
             self.canvas.plot_line_on_axes2(m, curve, linetype='--', color=color, label=f"Predicted {label}", linewidth=3, alpha = pred_alpha)
         self.canvas.autoscale_plot2()
         
-        self.model_stats_dict = {}
-        mn_list, mw_list, pdi_list = [], [], []
-
-        for label, curve in self.original_predictions_dict.items():
-            Mn = 1 / np.trapz(curve * np.exp(-x), x=x)
-            Mw = np.trapz(curve * np.exp(x), x=x)
-            PDI = Mw / Mn
-            mn_list.append(Mn)
-            mw_list.append(Mw)
-            pdi_list.append(PDI)
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            self.model_stats_dict[label] = [f"{format_e(Decimal(Mn))} (g/mol)", f"{format_e(Decimal(Mw))} (g/mol)", f"{PDI:.2f}"]
-        #self.predicted_stats_window = StatsWindow("Predicted MWD Stats", self.model_stats_dict, parent=self)
-        
-        if len(mn_list) > 1:
-            def format_e(n):
-                a = '%E' % n
-                return a.split('E')[0].rstrip('0').rstrip('.') + ' E' + a.split('E')[1]
-            if self.class_to_use == 0:
-                mean_Mn = format_e(Decimal(np.mean(mn_list)))
-                mean_Mw = format_e(Decimal(np.mean(mw_list)))
-                mean_PDI = f"{np.mean(pdi_list):.2f}"
-                self.model_stats_dict["Mean"] = [f"{mean_Mn} (g/mol)", f"{mean_Mw} (g/mol)", mean_PDI]
+        self.model_stats_dict = self.original_model_stats_dict.copy()
                 
         self.cleaned_pred = False
         self.undo_tails_correct_button.setVisible(False)
@@ -1998,7 +1384,6 @@ class MainWindow(QMainWindow):
         if dialog.exec_() != QDialog.Accepted:
             return
 
-        # Remove all previous predicted plots
         for label in self.predictions_dict.keys():
             self.canvas.remove_single_plot(f"Predicted {label}")
 
@@ -2018,7 +1403,7 @@ class MainWindow(QMainWindow):
                 Z_pred = 10**float(pred["raw"])
                 mean_Z_pred = np.log(Z_pred)-(sigma_mono**2)/2
                 pred_MWD = lognormal(self.z, mean_Z_pred, sigma_mono)
-                pred_MWD = pred_MWD / simps(pred_MWD, x = np.log(self.z))
+                pred_MWD = pred_MWD / np.trapz(pred_MWD, x = np.log(self.z))
                 new_curves[label] = pred_MWD
                 new_raws[label] = pred["raw"]
                 new_pdis[label] = [PDI]
@@ -2049,8 +1434,6 @@ class MainWindow(QMainWindow):
                 new_raws[label] = [ZS_pred, ZL_pred, phiL_pred]
                 new_pdis[label] = [PDIS, PDIL]
                 self.canvas.plot_line_on_axes2(m, pred_MWD, linetype='--', color=color, label=f"Predicted {label}", linewidth=3, alpha = pred_alpha)
-        #Not working properly, needs to update stats window as well and handling of Mw values does not work currently.
-        #^Think this is fixed now - do some testing to be sure.
         
         self.update_predicted_stats(new_curves, raw_dict=new_raws, pdi_dict=new_pdis)
         self.prediction_made = True
@@ -2152,7 +1535,6 @@ class MainWindow(QMainWindow):
             self.rheo_data_loaded = True
         else:
             return
-            
             
     def closeEvent(self, event):
         for window in [self.predicted_stats_window, self.gpc_stats_window]:
