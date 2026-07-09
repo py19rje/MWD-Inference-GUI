@@ -564,6 +564,7 @@ class MainWindow(QMainWindow):
         self.canvas.plot_scatter_on_axes1(self.w_values_Exp, self.Gpp_data_Exp, facecolors='none', edgecolors='red', linewidth=1, label="G'' Input", size=20)
         self.canvas.autoscale_plot1()
         self.rheo_data_loaded = True
+        self.modes_fitted = False
     
     def univ_norm(self):
         if not self.rheo_data_loaded:
@@ -837,6 +838,7 @@ class MainWindow(QMainWindow):
                     if idx == 0:
                         if self.class_to_use == 0:
                             self.tails_correct_button.setVisible(True)
+                            self.undo_tails_correct_button.setVisible(False)
                         else:
                             self.PDI_change_button.setVisible(True)
                 elif self.class_to_use == 2:
@@ -934,10 +936,10 @@ class MainWindow(QMainWindow):
             try:
                 if self.class_to_use == 0:
                     self.GPC_label.setText(f"Loaded GPC: {file_name}")
-                    m_data, self.y_data_GPC, stats = parse_mwd_file(file_path, self.class_to_use, m)
+                    self.m_data, self.y_data_GPC, stats = parse_mwd_file(file_path, self.class_to_use, m)
                     self.GPC_Mn, self.GPC_Mw, self.GPC_PDI = stats
 
-                    self.canvas.plot_line_on_axes2(m_data, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
+                    self.canvas.plot_line_on_axes2(self.m_data, self.y_data_GPC, color='blue', linetype='-', label="GPC Data", linewidth=3)
                                         
                     self.GPC_Mn_label.setText(f'GPC Mn: {format_e(Decimal(self.GPC_Mn))} (g/mol)')
                     self.GPC_Mw_label.setText(f'GPC Mw: {format_e(Decimal(self.GPC_Mw))} (g/mol)')
@@ -977,9 +979,9 @@ class MainWindow(QMainWindow):
                                 color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
                                 self.canvas.plot_line_on_axes2(m, prediction["curve"], linetype='--', color=color, label=f"Predicted {label}", linewidth=3, alpha = pred_alpha)
                         else:
-                            for idx, (label, curve) in enumerate(self.cleaned_predictions_dict.items()):
+                            for idx, (label, prediction) in enumerate(self.cleaned_predictions_dict.items()):
                                 color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
-                                self.canvas.plot_line_on_axes2(m, curve, linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
+                                self.canvas.plot_line_on_axes2(m, prediction["curve"], linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
                                 self.cleaned_pred = True
                                 self.undo_tails_correct_button.setVisible(True)
                         self.prediction_made = True
@@ -1097,9 +1099,9 @@ class MainWindow(QMainWindow):
                             color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
                             self.canvas.plot_line_on_axes2(m, prediction["curve"], linetype='--', color=color, label=f"Predicted {label}", linewidth=3, alpha = pred_alpha)
                     else:
-                        for idx, (label, curve) in enumerate(self.cleaned_predictions_dict.items()):
+                        for idx, (label, prediction) in enumerate(self.cleaned_predictions_dict.items()):
                             color = PREDICTION_COLORS[idx % len(PREDICTION_COLORS)]
-                            self.canvas.plot_line_on_axes2(m, curve, linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
+                            self.canvas.plot_line_on_axes2(m, prediction["curve"], linetype='--', color=color, label=f"Predicted {label} (cleaned)", linewidth=3, alpha = pred_alpha)
                             self.cleaned_pred = True
                             self.undo_tails_correct_button.setVisible(True)
                     self.prediction_made = True
