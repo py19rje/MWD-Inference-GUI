@@ -241,4 +241,4 @@ Stats are also calculated for the loaded GPC and can be seen by pressing the "GP
 
 ### Additional Notes
 
-For further questions or support, please contact py19rje@leeds.ac.uk.
+For further questions or support, please contact py19rje@leeds.ac.uk (Robert J. Elliott).
