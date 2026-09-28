@@ -4,6 +4,14 @@
 
 This repository contains code for a graphical user interface (GUI) for MWD inference tasks. Follow the instructions below to set up your environment and run the `Inference_GUI.py` file. This work forms part of the research programme of DPI, project \#861.
 
+### Associated Research
+
+1. "Using neural networks to deduce polymer molecular weight distributions from linear rheology": https://doi.org/10.1122/8.0001063. (Description of neural network methodology for linear polystyrene).
+
+2. "Universal Prediction of Molecular Weight Distribution for Entangled Linear Polymers from Linear Rheology Using Neural Networks": https://doi.org/10.1021/acs.macromol.6c02146. (Universal neural networks for linear entangled polymers of any backbone chemistry).
+
+Please cite article 2. if you wish to use this software as part of your research.
+
 
 ## Prerequisites
 
